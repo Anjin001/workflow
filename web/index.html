@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="workflow-token" content="__CSRF_TOKEN__" />
+    <meta name="color-scheme" content="light" />
+    <title>Workflow · 代码审查工作台</title>
+    <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/assets/style.css" />
+    <script src="/assets/app.js" defer></script>
+  </head>
+  <body>
+    <div id="sidebar-overlay" class="sidebar-overlay"></div>
+    <aside class="sidebar" aria-label="任务导航">
+      <a class="brand" href="/" aria-label="Workflow 首页"
+        ><span class="brand-icon">w<span>·</span></span
+        ><span>Workflow<small>代码审查工作台</small></span></a
+      >
+      <button id="new-task" class="new-task"><span>＋</span> 新建任务</button>
+      <div class="sidebar-label">
+        最近任务 <span id="history-count">0</span>
+      </div>
+      <nav id="history-list" class="history-list" aria-label="最近任务">
+        <p class="muted empty-history">
+          还没有任务记录<br />开始你的第一次代码审查
+        </p>
+      </nav>
+      <div class="sidebar-bottom">
+        <button id="help-button" class="sidebar-help">
+          <span>?</span> 使用帮助 <span class="subtle">↗</span>
+        </button>
+        <div class="local-note">
+          <span class="dot green"></span>
+          <div>本地工作区<small>任务记录保存在此电脑</small></div>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="breadcrumb">
+          <button
+            id="menu-button"
+            class="icon-button mobile-only"
+            aria-label="打开任务导航"
+          >
+            ☰</button
+          ><span>工作区</span><span class="slash">/</span
+          ><strong>代码审查</strong>
+        </div>
+        <button id="settings-button" class="model-button">
+          <span id="model-dot" class="dot"></span
+          ><span id="model-label">配置模型</span
+          ><svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.6"
+            aria-hidden="true"
+          >
+            <path d="M9 4h6l1 3 3 1 2 5-3 2-1 4H7l-1-4-3-2 2-5 3-1Z" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+        </button>
+      </header>
+
+      <section id="welcome" class="workspace">
+        <div class="welcome-heading">
+          <span class="workspace-mark">⌘</span>
+          <p class="eyebrow">YOUR CODE, A SECOND LOOK</p>
+          <h1>把需求交给你的代码团队</h1>
+          <p class="subtitle">
+            从第一行代码到最后一次审查，让三个 Agent 一起完成。
+          </p>
+        </div>
+        <div class="team-flow" aria-label="工作流程">
+          <span><i class="agent-dot coder-dot"></i>编码 Agent</span><b>→</b
+          ><span><i class="agent-dot reviewer-dot"></i>审查 Agent</span><b>→</b
+          ><span><i class="agent-dot fixer-dot"></i>修复 Agent</span>
+        </div>
+
+        <form id="composer" class="composer">
+          <label class="sr-only" for="requirement">描述你的编程需求</label>
+          <textarea
+            id="requirement"
+            maxlength="10000"
+            rows="5"
+            placeholder="描述你想实现的功能…&#10;例如：写一个列表去重函数，保留元素第一次出现的顺序，并处理空列表。"
+          ></textarea>
+          <div id="draft-status" class="draft-status" hidden></div>
+          <div class="composer-toolbar">
+            <div class="composer-options">
+              <button id="mode-button" class="quiet-button" type="button">
+                <span class="dot"></span><span id="mode-label">真实模型</span
+                ><span>⌄</span></button
+              ><button id="cases-button" class="quiet-button" type="button">
+                验收用例 <span id="case-count" class="count">0</span>
+              </button>
+            </div>
+            <button id="submit-task" class="primary-button" type="submit">
+              <span>准备任务</span><span>↗</span>
+            </button>
+          </div>
+        </form>
+        <div class="composer-hint">
+          <span id="composer-hint-text"
+            >先整理接口与验收用例，确认后开始编码和审查。</span
+          ><span><kbd>Ctrl</kbd> + <kbd>Enter</kbd></span>
+        </div>
+        <div class="examples-heading">
+          <span>从一个示例开始</span
+          ><button id="quick-demo" class="text-button">
+            无需 Key，体验完整流程 ↗
+          </button>
+        </div>
+        <div id="example-list" class="example-list"></div>
+        <p class="scope-note">
+          适用于 Python 单文件函数 · 可查看每次修复与验收的完整记录
+        </p>
+      </section>
+
+      <section id="result" class="result-workspace" hidden>
+        <div class="result-heading">
+          <div>
+            <p class="eyebrow">REVIEW WORKSPACE</p>
+            <h1 id="result-title">代码审查</h1>
+            <p id="result-model" class="muted"></p>
+          </div>
+          <div class="result-actions">
+            <button id="cancel-run" class="secondary-button" hidden>
+              停止任务</button
+            ><button id="reuse-task" class="secondary-button">再次运行</button
+            ><button id="download-all" class="primary-button">
+              下载结果 ↓
+            </button>
+          </div>
+        </div>
+        <div
+          id="run-status"
+          class="run-status"
+          role="status"
+          aria-live="polite"
+        ></div>
+        <div id="pipeline" class="pipeline"></div>
+        <div id="run-summary" class="run-summary"></div>
+        <div class="result-tabs" role="tablist" aria-label="运行结果">
+          <button role="tab" aria-selected="true" data-tab="code">代码</button
+          ><button role="tab" aria-selected="false" data-tab="review">
+            审查意见</button
+          ><button role="tab" aria-selected="false" data-tab="tests">
+            验收结果</button
+          ><button role="tab" aria-selected="false" data-tab="events">
+            执行过程
+          </button>
+        </div>
+        <div id="result-panel" class="result-panel" role="tabpanel"></div>
+      </section>
+      <footer class="page-footer">
+        <span>Workflow Studio</span><span>编码有依据，修复可追踪。</span>
+      </footer>
+    </main>
+
+    <dialog id="settings-dialog" class="settings-dialog">
+      <form id="settings-form">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">MODEL CONNECTION</p>
+            <h2>连接你的模型</h2>
+            <p class="muted">填写一次，在这个页面开始工作。</p>
+          </div>
+          <button
+            type="button"
+            class="close-dialog icon-button"
+            aria-label="关闭模型设置"
+          >
+            ×
+          </button>
+        </div>
+        <div class="mode-switch" role="group" aria-label="运行方式">
+          <button type="button" data-mode="real" class="selected">
+            使用 API</button
+          ><button type="button" data-mode="mock">离线体验</button>
+        </div>
+        <div id="real-settings">
+          <label class="field-label" for="provider">服务类型</label
+          ><select id="provider">
+            <option value="deepseek">DeepSeek</option>
+            <option value="compatible">其他兼容接口</option>
+            <option value="local">本地模型 · Ollama 等</option>
+          </select>
+          <label class="field-label" for="base-url">模型服务地址</label
+          ><input
+            id="base-url"
+            type="url"
+            autocomplete="url"
+            spellcheck="false"
+            placeholder="https://api.deepseek.com"
+          />
+          <p class="field-help">
+            可以粘贴基础地址，或完整的 /chat/completions 地址。
+          </p>
+          <label class="field-label" for="api-key"
+            >API Key
+            <span id="key-optional" hidden>（本地服务可留空）</span></label
+          >
+          <div class="password-field">
+            <input
+              id="api-key"
+              type="password"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="粘贴你的 API Key"
+            /><button id="toggle-key" type="button" aria-label="显示 API Key">
+              显示
+            </button>
+          </div>
+          <div class="model-label-row">
+            <label class="field-label" for="model-name">模型名称</label
+            ><button id="check-connection" type="button" class="text-button">
+              测试连接并读取模型
+            </button>
+          </div>
+          <input
+            id="model-name"
+            list="model-options"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="例如 deepseek-flash"
+          /><datalist id="model-options"></datalist>
+          <p class="field-help">
+            支持手动输入。读取模型列表只检查连接，不代表聊天生成已验证。
+          </p>
+          <details class="advanced-settings">
+            <summary>兼容性与超时</summary>
+            <label class="checkbox-row"
+              ><input id="json-mode" type="checkbox" checked /> 启用服务的 JSON
+              输出模式</label
+            >
+            <p class="field-help">
+              若服务提示不支持 response_format，可关闭后重试。
+            </p>
+            <label class="field-label" for="request-timeout"
+              >请求超时（秒）</label
+            ><input
+              id="request-timeout"
+              type="number"
+              min="5"
+              max="300"
+              value="60"
+            />
+          </details>
+          <div class="privacy-note">
+            <span>◇</span>
+            <p>
+              Key
+              只在本次页面使用期间保留，不写入浏览器存储或项目文件。请求由本机转发到你填写的模型服务。
+            </p>
+          </div>
+        </div>
+        <div id="mock-settings" class="mock-settings" hidden>
+          <div class="demo-symbol">⌘</div>
+          <h3>先体验，再连接</h3>
+          <p>无需密钥，使用三个内置任务走完编码、审查与修复。</p>
+          <p class="field-help">
+            Agent 返回固定示例，验收代码会实际执行。自定义需求需要使用真实 API。
+          </p>
+          <label class="field-label" for="mock-scenario">演示场景</label
+          ><select id="mock-scenario">
+            <option value="repair">发现问题，修复后通过</option>
+            <option value="pass">初版直接通过</option>
+            <option value="stuck">始终未修复，达到上限停止</option>
+          </select>
+        </div>
+        <p
+          id="connection-feedback"
+          class="inline-feedback"
+          role="status"
+          aria-live="polite"
+        ></p>
+        <div class="dialog-footer">
+          <button type="button" id="settings-demo" class="text-button">
+            先体验示例</button
+          ><button type="submit" class="primary-button">保存并返回 ↗</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="cases-dialog" class="cases-dialog">
+      <div class="dialog-heading">
+        <div>
+          <p class="eyebrow">ACCEPTANCE CHECK</p>
+          <h2>确认接口与验收用例</h2>
+          <p class="muted">用例确认后固定，修复 Agent 只修改代码。</p>
+        </div>
+        <button class="close-dialog icon-button" aria-label="关闭验收编辑">
+          ×
+        </button>
+      </div>
+      <div class="task-fields">
+        <label
+          >任务名称<input
+            id="task-id"
+            maxlength="80"
+            placeholder="例如 list_unique" /></label
+        ><label
+          >公开函数名<input
+            id="function-name"
+            maxlength="80"
+            spellcheck="false"
+            placeholder="例如 deduplicate"
+        /></label>
+      </div>
+      <p id="cases-intro" class="field-help">
+        核对模型提出的验收结果，也可以自己增删和修改。
+      </p>
+      <div id="case-editor" class="case-editor"></div>
+      <div class="case-tools">
+        <button id="add-case" class="secondary-button">＋ 添加用例</button
+        ><button id="import-task-button" class="text-button">
+          导入已有任务文件</button
+        ><input
+          id="import-task"
+          type="file"
+          accept=".json,application/json"
+          hidden
+        />
+      </div>
+      <details class="run-options">
+        <summary>运行选项</summary>
+        <label class="field-label" for="max-repairs">最多修复次数</label
+        ><input id="max-repairs" type="number" min="0" max="10" value="2" />
+      </details>
+      <p id="cases-feedback" class="inline-feedback" role="alert"></p>
+      <div class="dialog-footer">
+        <span class="field-help"
+          >参数与结果填写 JSON 值；不必再创建 JSON 文件。</span
+        ><button id="save-cases" class="primary-button">确认验收用例 ✓</button>
+      </div>
+    </dialog>
+
+    <dialog id="help-dialog" class="help-dialog">
+      <div class="dialog-heading">
+        <h2>三步开始使用</h2>
+        <button class="close-dialog icon-button" aria-label="关闭帮助">
+          ×
+        </button>
+      </div>
+      <ol class="help-steps">
+        <li>
+          <strong>连接模型</strong>
+          <p>
+            右上角填写服务地址、API Key 和模型名称。也可以先用离线示例体验。
+          </p>
+        </li>
+        <li>
+          <strong>描述需求</strong>
+          <p>输入要实现的功能，准备任务后确认函数名与验收用例。</p>
+        </li>
+        <li>
+          <strong>开始审查</strong>
+          <p>自动编码、验收、审查和修复，完成后复制代码或下载结果。</p>
+        </li>
+      </ol>
+      <p class="field-help">
+        目前支持 Python
+        单文件同步函数。验收会在本机运行生成的代码，建议用于自己的课程样例。
+      </p>
+    </dialog>
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  </body>
+</html>

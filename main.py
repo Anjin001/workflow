@@ -64,7 +64,7 @@ def main(argv: list[str] | None = None) -> int:
         store.finish(result)
         print(f"\n状态：{result.status}；修复：{result.repair_count}/{result.max_repairs}")
         print(f"报告：{store.path / 'report.md'}")
-        return {"completed": 0, "needs_changes": 1, "failed": 2}[result.status]
+        return {"completed": 0, "needs_changes": 1, "failed": 2, "cancelled": 130}[result.status]
     except (OSError, ValueError, WorkflowError) as exc:
         print(f"运行失败：{exc}", file=sys.stderr)
         return 2

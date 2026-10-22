@@ -14,9 +14,12 @@ ROOT_FILES = {
     "pyproject.toml",
     ".env.example",
     ".gitignore",
+    ".gitattributes",
+    "start.py",
+    "start.bat",
 }
-SOURCE_DIRS = {"workflow", "examples", "tests", "docs", "scripts"}
-SUFFIXES = {".py", ".md", ".json", ".txt", ".toml"}
+SOURCE_DIRS = {"workflow", "examples", "tests", "docs", "scripts", "web"}
+SUFFIXES = {".py", ".md", ".json", ".txt", ".toml", ".html", ".css", ".js", ".svg"}
 
 
 def build_archive(name: str, output: Path) -> Path:

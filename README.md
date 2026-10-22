@@ -2,7 +2,26 @@
 
 软件工程 Homework 2：三个 Agent 协作完成 **编码、审查、修复**，通过共享状态与固定验收用例控制修复循环。
 
-支持真实模型调用、自定义单文件 Python 函数任务、执行日志、逐步状态快照和结果报告。命令行作为交互入口，不依赖复杂调度框架。
+支持网页设置模型、自定义需求、图形化验收编辑、真实模型调用、执行日志、版本对比与结果下载。保留命令行入口，底层不依赖复杂调度框架。
+
+## 推荐用法：双击打开网页
+
+需要 Python 3.11+，无需安装 Node.js。**双击项目根目录的 `start.bat`**，首次会自动准备依赖，随后打开浏览器。
+
+1. 右上角进入“模型设置”，填写 API Key、模型服务地址和模型名称。
+2. 输入自己的编程需求，点击“准备任务”。
+3. 在网页确认模型建议的函数名和验收用例，再点击“开始审查”。
+4. 查看实时阶段、审查意见、验收结果及代码版本，复制代码或下载完整结果。
+
+也可以直接点击“无需 Key，体验完整流程”。它会使用明确标注的离线示例，真实执行验收并展示一次修复。
+
+**网页使用不需要编辑 .env，不需要创建 JSON 文件，也不需要输入命令。** 服务地址和模型名可以记住；API Key 不写入浏览器存储或项目文件，刷新页面后需重新填写。
+
+支持 DeepSeek、其他 Chat Completions 兼容接口，以及本地模型的兼容接口。可以读取模型列表，也能手动输入模型名称。基础地址和完整的 `/chat/completions` 地址都可以粘贴。
+
+默认网页地址是 `http://127.0.0.1:8765`；被占用时会自动选择其他端口。重复双击会打开已有工作台。关闭启动窗口停止服务，关掉网页不会停止后台任务。
+
+详细交互说明见 [docs/INTERFACE.md](docs/INTERFACE.md)。以下命令主要供开发、测试和原命令行方式使用。
 
 ## 功能与范围
 
@@ -16,7 +35,7 @@
 
 ## 环境与安装
 
-需要 Python 3.11+。开发验证使用 Python 3.12；运行依赖只有 httpx 和 python-dotenv。
+需要 Python 3.11+。开发验证使用 Python 3.12；运行依赖为 httpx、python-dotenv、FastAPI 和 Uvicorn。
 
 ```powershell
 cd E:\workflow
@@ -47,7 +66,9 @@ python -m venv .venv
 .\.venv\Scripts\python.exe main.py --mock --max-repairs 0
 ```
 
-## 真实模型运行
+## 真实模型运行（命令行方式）
+
+网页中直接填写设置即可。只有选择命令行入口时才需要以下 .env 配置。
 
 首次配置时复制 `.env.example` 为 `.env`，在 `.env` 中填写自己的密钥：
 
@@ -72,6 +93,7 @@ LLM_MODEL=deepseek-flash
 | LLM_MAX_TOKENS | 4096 | 最大输出 Token；截断时明确失败 |
 | OUTPUT_RETRIES | 1 | 输出 JSON 或字段不合规时的重新生成次数 |
 | TEST_TIMEOUT | 5 | 每轮验收子进程超时，单位秒 |
+| LLM_JSON_MODE | true | 是否发送服务原生 JSON 输出参数；不支持时可关闭 |
 
 真实模式会把需求、代码、验收结果与审查意见发送到所配置的模型服务。密钥只用于请求头，不写入提示词和报告。
 
@@ -99,7 +121,7 @@ LLM_MODEL=deepseek-flash
 - `tolerance`：数字比较的绝对误差，默认为 0，也用于嵌套列表、对象中的数字。
 - `check_input_unchanged`：是否要求调用后输入不变，默认为 false。
 
-源码最多 64000 字符，任务文件最多 256 KB，任务需要 1 至 100 个验收用例。验收由用户固定，Agent 不持有修改测试的工具。
+源码最多 64000 字符，任务文件最多 256 KB，任务需要 1 至 100 个验收用例。验收由用户固定，Agent 不持有修改测试的工具。网页可先由编码角色生成验收草稿，必须经用户确认后才启动；草稿生成不计入工作流报告的执行用量。
 
 ## 执行流程与输出
 
@@ -118,7 +140,7 @@ LLM_MODEL=deepseek-flash
 | events.jsonl / run.log | 节点事件、重试信息和执行日志 |
 | report.json / report.md | 最终状态、用例结果、问题、错误和模型用量 |
 
-发生错误后已保存的步骤可用于诊断；当前不支持从快照自动续跑。模型未提供用量时 Token 数为 0，不能据此理解为没有计费。
+发生错误后已保存的步骤可用于诊断；当前不支持从快照自动续跑。模型未提供用量时 Token 数为 0，不能据此理解为没有计费。网页支持步骤边界停止，状态为 cancelled；服务关闭前未结束的记录重开后显示为中断。
 
 验收在带超时的子进程与临时目录中执行，**不是安全沙箱**。仅运行自己的课程样例；执行不可信外部代码需要容器等独立隔离。
 
@@ -136,7 +158,9 @@ LLM_MODEL=deepseek-flash
 ## 文件结构与阅读顺序
 
 ```text
-main.py                  命令行入口
+start.bat / start.py      双击启动网页，自动打开浏览器
+main.py                  保留的命令行入口
+web/                     HTML、CSS、JavaScript，无需前端构建
 workflow/
   task.py                任务与验收契约
   state.py               共享状态与结构化结果
@@ -149,13 +173,15 @@ workflow/
   artifacts.py            日志、快照与报告
   config.py               配置加载
   mock.py                 离线模型
+  web.py / web_models.py  本地页面、请求校验和连接测试
+  web_service.py          后台运行、历史与协作式停止
 examples/                 三个完整任务
 tests/                    自动化测试
 docs/                     作业对应说明、演示步骤
 scripts/package_submission.py  提交打包
 ```
 
-建议先读 main、state、runner，再看 agents、prompts、llm，最后看验证与报告。架构和扩展位置见 [Design.md](Design.md)。
+建议先读 state、runner，再看 agents、prompts、llm；网页交互从 web.py 和 web/assets/app.js 开始。架构和扩展位置见 [Design.md](Design.md)。
 
 ## 作业提交
 
@@ -165,7 +191,7 @@ scripts/package_submission.py  提交打包
 .\.venv\Scripts\python.exe scripts/package_submission.py --name "自己的学号姓名"
 ```
 
-压缩包位于 `dist/`，包含源码、配置示例、任务、测试和文档，排除 `.env`、`.git`、虚拟环境和运行输出。同名文件已存在时拒绝覆盖。
+压缩包位于 `dist/`，包含启动文件、网页、源码、配置示例、任务、测试和文档，排除 `.env`、`.git`、虚拟环境和运行输出。同名文件已存在时拒绝覆盖。
 
 按课件将小于 200 MB 的“学号姓名”压缩包提交至“002Homework2”；截止时间为北京时间 2026 年 10 月 25 日 24:00。仓库当前为私有，如通过链接供老师检查，需要你按课程要求提供访问方式。演示视频不超过一分钟，为可选项。
 

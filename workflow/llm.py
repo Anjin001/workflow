@@ -51,9 +51,10 @@ class ChatModel:
             "messages": messages,
             "temperature": 0.1,
             "max_tokens": self.settings.max_tokens,
-            "response_format": {"type": "json_object"},
             "stream": False,
         }
+        if self.settings.json_mode:
+            body["response_format"] = {"type": "json_object"}
         for attempt in range(self.settings.request_retries + 1):
             self.usage.requests += 1
             try:

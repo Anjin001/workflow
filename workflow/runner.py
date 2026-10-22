@@ -4,7 +4,7 @@ import logging
 from collections.abc import Callable
 
 from .agents import CodingAgent, FixAgent, ReviewAgent
-from .errors import WorkflowError
+from .errors import WorkflowCancelled, WorkflowError
 from .llm import Model
 from .state import Event, WorkflowState, timestamp
 from .tools import CodeValidator, code_hash
@@ -93,6 +93,8 @@ class Workflow:
                 state.review = None
                 state.validation = None
                 emit("fixer", result.summary)
+        except WorkflowCancelled:
+            return finish("cancelled", "任务已停止，已完成的代码与记录保留")
         except Exception as exc:
             state.status = "failed"
             state.error = f"{type(exc).__name__}: {exc}"

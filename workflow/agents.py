@@ -8,7 +8,7 @@ from typing import Any, TypeVar
 
 from .errors import OutputError
 from .llm import Model
-from .prompts import CODER_PROMPT, FIXER_PROMPT, REVIEWER_PROMPT
+from .prompts import CODER_PROMPT, FIXER_PROMPT, PREPARE_PROMPT, REVIEWER_PROMPT
 from .state import CodeResult, Issue, ReviewResult, ValidationResult
 from .task import TaskSpec, reject_constant, text
 
@@ -96,6 +96,12 @@ class CodingAgent(JsonAgent):
 
     def run(self, task: TaskSpec) -> CodeResult:
         return self.ask({"task": task.to_dict()}, parse_code)
+
+    def prepare(self, requirement: str) -> TaskSpec:
+        """先提出验收草稿；网页要求用户确认后才能启动编码。"""
+        preparation = JsonAgent(self.model, "coder", PREPARE_PROMPT, self.output_retries)
+        task = preparation.ask({"requirement": requirement}, TaskSpec.from_dict)
+        return TaskSpec(task.id, requirement, task.function_name, task.cases)
 
 
 class ReviewAgent(JsonAgent):

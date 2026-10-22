@@ -86,6 +86,8 @@ def test_submission_archive_excludes_local_data_and_can_run_after_extraction(tmp
             for part in Path(name).parts
         )
         assert any(name.endswith("/.env.example") for name in names)
+        for required in ("start.bat", "start.py", "web/index.html", "web/assets/app.js"):
+            assert f"测试提交/{required}" in names
         archive.extractall(tmp_path / "extract")
     extracted = tmp_path / "extract" / "测试提交"
     process = subprocess.run(

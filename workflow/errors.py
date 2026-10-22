@@ -11,3 +11,7 @@ class ModelError(WorkflowError):
 
 class OutputError(WorkflowError):
     """模型输出未满足约定的数据结构。"""
+
+
+class WorkflowCancelled(WorkflowError):
+    """用户要求在步骤边界停止任务。"""

@@ -1,3 +1,4 @@
+import json
 from dataclasses import replace
 
 import httpx
@@ -96,3 +97,17 @@ def test_incomplete_or_invalid_envelope_is_rejected(response):
 def test_missing_key_has_clear_configuration_error():
     with pytest.raises(ModelError, match="LLM_API_KEY"):
         ChatModel(Settings())
+
+
+def test_json_mode_can_be_disabled_for_compatible_services():
+    def respond(request):
+        assert "response_format" not in json.loads(request.content)
+        return successful()
+
+    model = ChatModel(
+        Settings(api_key="test-only", json_mode=False), transport=httpx.MockTransport(respond)
+    )
+    try:
+        assert model.complete("coder", []) == "{}"
+    finally:
+        model.close()
