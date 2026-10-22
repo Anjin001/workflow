@@ -11,6 +11,7 @@ htmlcov/
 .env.*
 !.env.example
 runs/
+workflows/
 dist/
 workspace/
 output/

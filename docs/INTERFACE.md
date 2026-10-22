@@ -28,6 +28,8 @@
 
 ## 开源交互参考
 
+当前已加入可视化流程设计器与可选问题验证者，使用步骤和范围见 [WORKFLOWS.md](WORKFLOWS.md)。图编辑器使用原生 HTML/SVG，自行实现，没有引入第三方工作流项目源码。
+
 - [Open WebUI](https://github.com/open-webui/open-webui)：参考集中配置模型服务、以工作区承载交互的产品方向。
 - [LobeHub](https://github.com/lobehub/lobehub)：参考任务/会话导航与主工作区的分离方式。
 - [Dify](https://github.com/langgenius/dify)：参考把多步骤工作流与执行状态呈现给用户的方向。

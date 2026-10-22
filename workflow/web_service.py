@@ -12,9 +12,10 @@ from pathlib import Path
 from .artifacts import RunStore, write_json
 from .config import Settings
 from .errors import WorkflowCancelled
+from .graph import default_graph, parse_graph
+from .graph_runner import GraphWorkflow
 from .llm import ChatModel, Model
 from .mock import MockModel
-from .runner import Workflow
 from .state import Event, WorkflowState, timestamp
 from .task import TaskSpec
 from .tools import CodeValidator
@@ -61,8 +62,15 @@ class JobManager:
         self.active: str | None = None
 
     def submit(
-        self, task: TaskSpec, settings: Settings, mode: str, scenario: str, max_repairs: int
+        self,
+        task: TaskSpec,
+        settings: Settings,
+        mode: str,
+        scenario: str,
+        max_repairs: int,
+        definition: dict | None = None,
     ) -> str:
+        graph = parse_graph(definition) if definition is not None else default_graph()
         if mode == "mock":
             MockModel(task, scenario)  # 提交之前检查是否是支持的离线任务。
         with self.lock:
@@ -70,13 +78,22 @@ class JobManager:
                 raise RuntimeError("已有任务正在运行，请等待完成或先停止它")
             store = RunStore(self.output_root)
             write_json(store.path / "task.json", task.to_dict())
-            write_json(store.path / "report.json", WorkflowState(task, max_repairs).to_dict())
+            initial = WorkflowState(task, max_repairs, workflow=graph.model_dump())
+            write_json(store.path / "workflow.json", graph.model_dump())
+            write_json(store.path / "report.json", initial.to_dict())
             run_id = store.path.name
             job = Job(store, threading.Event())
             self.jobs[run_id] = job
             self.active = run_id
             job.future = self.executor.submit(
-                self._execute, run_id, task, settings, mode, scenario, max_repairs
+                self._execute,
+                run_id,
+                task,
+                settings,
+                mode,
+                scenario,
+                max_repairs,
+                graph.model_dump(),
             )
         return run_id
 
@@ -88,9 +105,10 @@ class JobManager:
         mode: str,
         scenario: str,
         max_repairs: int,
+        definition: dict,
     ) -> None:
         job = self.jobs[run_id]
-        state = WorkflowState(task, max_repairs)
+        state = WorkflowState(task, max_repairs, workflow=definition)
         model = None
         handler = None
         workflow_logger = logging.getLogger("workflow")
@@ -110,8 +128,11 @@ class JobManager:
                 with self.lock:
                     job.store.record(current, event)
 
-            state = Workflow(
-                wrapped, CodeValidator(settings.test_timeout), settings.output_retries
+            state = GraphWorkflow(
+                wrapped,
+                parse_graph(definition),
+                CodeValidator(settings.test_timeout),
+                settings.output_retries,
             ).run(state, observe)
         except Exception as exc:
             state.status = "failed"

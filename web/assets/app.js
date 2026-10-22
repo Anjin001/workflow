@@ -40,6 +40,7 @@ const labels = {
   running: "运行中",
   completed: "已完成",
   needs_changes: "仍需修改",
+  needs_review: "需要人工确认",
   failed: "执行失败",
   cancelled: "已停止",
   interrupted: "运行已中断",
@@ -50,6 +51,10 @@ const stages = {
   validate: "验收",
   reviewer: "审查",
   fixer: "修复",
+  verifier: "验证问题",
+  custom: "自定义角色",
+  node_start: "节点启动",
+  gate: "结果判定",
   end: "结束",
   error: "错误",
 };
@@ -518,6 +523,7 @@ async function startRun() {
       mode: app.config.mode,
       scenario: app.config.scenario,
       max_repairs: app.maxRepairs,
+      workflow: window.workflowEditor?.definition() || null,
     };
     if (app.config.mode === "real") payload.connection = connection();
     const data = await api("/api/runs", payload);
@@ -567,6 +573,7 @@ async function loadRun(runId, refresh = false) {
     app.currentRun = data;
     $("welcome").hidden = true;
     $("result").hidden = false;
+    $("graph-workspace").hidden = true;
     document.body.classList.remove("sidebar-open");
     renderRun();
     if (isRunning(data))
@@ -580,6 +587,7 @@ async function loadRun(runId, refresh = false) {
 }
 
 function currentStage(report) {
+  if (report.workflow) return report.node_runs?.at(-1)?.kind || "start";
   if (!isRunning(report)) return null;
   const last = report.history.at(-1)?.stage;
   if (!last || last === "start") return "coder";
@@ -612,17 +620,22 @@ function renderRun() {
     report.cancel_requested && running
       ? "已请求停止，当前步骤结束后会保存已有结果。"
       : running
-        ? `${{ coder: "编码 Agent 正在生成代码", validate: "正在运行当前版本的验收", reviewer: "审查 Agent 正在检查代码", fixer: "修复 Agent 正在处理问题" }[active] || "正在整理运行结果"}…`
+        ? report.workflow
+          ? `正在执行：${report.node_runs?.at(-1)?.name || "准备流程"}…`
+          : `${{ coder: "编码 Agent 正在生成代码", validate: "正在运行当前版本的验收", reviewer: "审查 Agent 正在检查代码", fixer: "修复 Agent 正在处理问题" }[active] || "正在整理运行结果"}…`
         : {
             completed: "已完成：当前版本通过固定验收，审查未发现待处理问题。",
             needs_changes:
-              "达到修复上限，仍有问题。可以查看审查意见后调整需求或再次运行。",
+              report.history.at(-1)?.message ||
+              "达到运行上限，仍有问题需要处理。",
+            needs_review:
+              "存在待确认问题，请查看“问题验证”中的证据后人工判断。",
             failed: report.error || "本次执行未完成，请查看执行记录。",
             cancelled: "任务已停止，已完成的代码与记录已经保留。",
             interrupted: "上次运行因服务关闭而中断，已完成的记录已保留。",
           }[report.status];
   $("run-status").className =
-    `run-status${report.status === "failed" ? " error" : ["needs_changes", "interrupted"].includes(report.status) ? " warning" : ""}`;
+    `run-status${report.status === "failed" ? " error" : ["needs_changes", "needs_review", "interrupted"].includes(report.status) ? " warning" : ""}`;
   $("run-status").innerHTML =
     `${running ? '<span class="status-spinner" aria-hidden="true"></span>' : '<span aria-hidden="true">' + (report.status === "completed" ? "✓" : "◇") + "</span>"}<span>${escapeHtml(statusText)}</span>`;
   $("pipeline").innerHTML = ["coder", "validate", "reviewer", "fixer"]
@@ -641,6 +654,36 @@ function renderRun() {
         ),
       )
     : 0;
+  if (report.workflow) {
+    const ordered = [],
+      seen = new Set();
+    function trace(id) {
+      while (id && !seen.has(id)) {
+        seen.add(id);
+        const node = report.workflow.nodes.find((item) => item.id === id);
+        ordered.push(node);
+        id = report.workflow.edges.find(
+          (edge) =>
+            edge.source === id &&
+            edge.condition === (node.kind === "gate" ? "pass" : "always"),
+        )?.target;
+      }
+    }
+    trace(report.workflow.nodes.find((node) => node.kind === "start").id);
+    trace(
+      report.workflow.edges.find((edge) => edge.condition === "repair")?.target,
+    );
+    $("pipeline").innerHTML = ordered
+      .filter((node) => !["start", "end", "gate"].includes(node.kind))
+      .map((node) => {
+        const record = report.node_runs
+          ?.filter((item) => item.node_id === node.id)
+          .at(-1);
+        const status = record?.status;
+        return `<div class="pipeline-step ${status === "running" ? "active" : status === "completed" ? "done" : ""}"><span class="step-icon">${status === "completed" ? "✓" : status === "running" ? "◌" : "·"}</span><span>${escapeHtml(node.name)}</span></div>`;
+      })
+      .join("");
+  }
   const passed =
     report.validation?.cases.filter((item) => item.passed).length || 0;
   const total = report.validation?.cases.length || report.task.cases.length;
@@ -716,6 +759,14 @@ function selectedCode() {
 function renderPanel() {
   const report = app.currentRun;
   const panel = $("result-panel");
+  if (app.tab === "graph") {
+    window.workflowEditor?.renderReport(report);
+    return;
+  }
+  if (app.tab === "verification") {
+    window.workflowEditor?.renderVerification(report);
+    return;
+  }
   const scrolls = [...panel.querySelectorAll(".code-scroll")].map((node) => [
     node.scrollTop,
     node.scrollLeft,
@@ -771,6 +822,15 @@ function renderPanel() {
       : `<h3 class="panel-heading"><span class="version-label">v${validation.code_version}</span>${escapeHtml(validation.details)}</h3>${validation.cases.length ? `<div class="code-box">${validation.cases.map((test) => `<div class="test-row ${test.passed ? "" : "failed"}"><span class="test-mark">${test.passed ? "✓" : "×"}</span><div><strong>${escapeHtml(test.name)}</strong><p>${escapeHtml(test.detail)}</p></div></div>`).join("")}</div>` : `<div class="inline-error">${escapeHtml(validation.details)}</div>`}`;
   } else {
     panel.innerHTML = `${report.error ? `<div class="inline-error">${escapeHtml(report.error)}</div>` : ""}${report.history.map((event) => `<div class="event-row"><span class="event-time">${escapeHtml(event.time.slice(11, 19))}</span><span class="event-stage">${escapeHtml(stages[event.stage] || event.stage)} · v${event.code_version}</span><span class="event-message">${escapeHtml(event.message)}</span></div>`).join("")}`;
+  }
+  if (
+    app.tab === "review" &&
+    report.workflow?.nodes.some((node) => node.kind === "verifier")
+  ) {
+    panel.insertAdjacentHTML(
+      "afterbegin",
+      '<p class="graph-feedback">以下是发现者提出的候选问题，确认或驳回的依据请查看“问题验证”。</p>',
+    );
   }
   panel.querySelectorAll(".code-scroll").forEach((node, index) => {
     if (scrolls[index]) {
@@ -899,6 +959,7 @@ function bindEvents() {
   $("reuse-task").addEventListener("click", () => {
     const task = structuredClone(app.currentRun.task);
     const repairs = app.currentRun.max_repairs;
+    window.workflowEditor?.restore(app.currentRun.workflow);
     loadExample(task);
     app.maxRepairs = repairs;
   });

@@ -51,6 +51,13 @@ class RunInput(BaseModel):
     connection: ConnectionInput | None = None
     scenario: Literal["repair", "pass", "stuck"] = "repair"
     max_repairs: int = Field(default=2, ge=0, le=10, strict=True)
+    workflow: dict[str, Any] | None = None
+
+
+class SaveWorkflowInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: str | None = None
+    definition: dict[str, Any]
 
 
 def check_connection(settings: Settings) -> dict:

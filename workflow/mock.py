@@ -90,6 +90,26 @@ class MockModel:
                 ]
             )
             result = {"summary": "离线审查：依据实际验收结果生成固定格式意见。", "issues": issues}
+        elif role == "custom":
+            result = {
+                "summary": "离线角色占位输出；未执行自定义提示词推理。",
+                "recommendations": ["切换真实模型后，此节点将按你配置的职责分析所选输入。"],
+            }
+        elif role == "verifier":
+            result = {
+                "summary": "离线验证仅展示结构，候选问题来自真实验收失败。",
+                "findings": [
+                    {
+                        "id": item["id"],
+                        "verdict": "confirmed"
+                        if not payload["validation"]["passed"]
+                        else "uncertain",
+                        "reason": "固定演示结论：依据传入的验收失败记录，未执行独立模型推理。",
+                        "source_quote": payload["code"].splitlines()[0],
+                    }
+                    for item in payload["candidates"]
+                ],
+            }
         else:
             raise ValueError(f"未知角色：{role}")
         return json.dumps(result, ensure_ascii=False)

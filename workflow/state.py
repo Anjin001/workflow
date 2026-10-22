@@ -75,6 +75,10 @@ class WorkflowState:
     finished_at: str = ""
     usage: ModelUsage = field(default_factory=ModelUsage)
     history: list[Event] = field(default_factory=list)
+    workflow: dict | None = None
+    current_node: str = ""
+    node_runs: list[dict] = field(default_factory=list)
+    verification: dict | None = None
 
     def to_dict(self) -> dict:
         data = asdict(self)

@@ -19,6 +19,53 @@ from workflow.web_models import ConnectionInput, check_connection
 ROOT = Path(__file__).resolve().parent.parent
 
 
+def test_workflow_save_load_and_invalid_topology_are_checked(client, task):
+    definition = client.get("/api/bootstrap").json()["workflow_templates"][1]
+    entry = client.post("/api/workflows/save", json={"definition": definition}).json()
+    assert client.get("/api/workflows").json()["items"] == [entry]
+    bad = json.loads(json.dumps(definition))
+    next(e for e in bad["edges"] if e["source"] == "coder")["target"] = "gate"
+    assert client.post("/api/workflows/validate", json=bad).status_code == 400
+    assert (
+        client.post(
+            "/api/runs", json={"task": task.to_dict(), "mode": "mock", "workflow": bad}
+        ).status_code
+        == 400
+    )
+    assert client.get("/api/runs").json()["items"] == []
+    response = client.post(
+        "/api/runs", json={"task": task.to_dict(), "mode": "mock", "workflow": definition}
+    )
+    assert response.status_code == 202
+    run_id = response.json()["run_id"]
+    report = wait_finished(client, run_id)
+    assert report["status"] == "completed"
+    assert report["workflow"] == definition
+    assert len([n for n in report["node_runs"] if n["kind"] == "verifier"]) == 2
+    assert client.get(f"/api/runs/{run_id}/download/workflow.json").json() == definition
+    bundle = client.get(f"/api/runs/{run_id}/download/result.zip")
+    with zipfile.ZipFile(io.BytesIO(bundle.content)) as archive:
+        assert "workflow.json" in archive.namelist()
+
+
+def test_workflow_changes_do_not_rewrite_a_run_snapshot(client, task):
+    definition = client.get("/api/bootstrap").json()["workflow_templates"][0]
+    entry = client.post("/api/workflows/save", json={"definition": definition}).json()
+    response = client.post(
+        "/api/runs", json={"task": task.to_dict(), "mode": "mock", "workflow": definition}
+    )
+    run_id = response.json()["run_id"]
+    definition["name"] = "修改后的流程"
+    assert (
+        client.post(
+            "/api/workflows/save", json={"id": entry["id"], "definition": definition}
+        ).status_code
+        == 200
+    )
+    report = wait_finished(client, run_id)
+    assert report["workflow"]["name"] != definition["name"]
+
+
 @pytest.fixture
 def client(tmp_path):
     app = create_app(ROOT, tmp_path / "runs")

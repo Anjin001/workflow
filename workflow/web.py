@@ -17,13 +17,21 @@ from fastapi.staticfiles import StaticFiles
 from .agents import CodingAgent
 from .config import Settings
 from .errors import WorkflowError
+from .graph import GraphLibrary, default_graph, parse_graph
 from .llm import ChatModel, Model
 from .task import TaskSpec, load_task
-from .web_models import ConnectionInput, PrepareInput, RunInput, check_connection
+from .web_models import ConnectionInput, PrepareInput, RunInput, SaveWorkflowInput, check_connection
 from .web_service import JobManager
 
 ROOT = Path(__file__).resolve().parent.parent
-DOWNLOAD_FILES = {"final.py", "initial.py", "report.md", "report.json", "task.json"}
+DOWNLOAD_FILES = {
+    "final.py",
+    "initial.py",
+    "report.md",
+    "report.json",
+    "task.json",
+    "workflow.json",
+}
 
 
 def create_app(
@@ -33,6 +41,7 @@ def create_app(
     connection_checker: Callable[[Settings], dict] = check_connection,
 ) -> FastAPI:
     manager = JobManager(output_root or root / "runs", model_factory)
+    library = GraphLibrary((output_root or root / "runs").parent / "workflows")
 
     @asynccontextmanager
     async def lifespan(app):
@@ -99,7 +108,27 @@ def create_app(
         examples = [
             load_task(path).to_dict() for path in sorted((root / "examples").glob("*.json"))
         ]
-        return {"examples": examples, "history": manager.history()}
+        return {
+            "examples": examples,
+            "history": manager.history(),
+            "workflow_templates": [default_graph().model_dump(), default_graph(True).model_dump()],
+        }
+
+    @app.get("/api/workflows")
+    def workflows():
+        return {"items": library.list()}
+
+    @app.post("/api/workflows/validate")
+    def validate_workflow(payload: dict):
+        graph = parse_graph(payload)
+        return {
+            "definition": graph.model_dump(),
+            "message": "结构有效：主路径完整、数据依赖有效，修复回路受次数与步数上限约束。",
+        }
+
+    @app.post("/api/workflows/save")
+    def save_workflow(payload: SaveWorkflowInput):
+        return library.save(payload.definition, payload.id)
 
     @app.post("/api/connection/check")
     def connection(payload: ConnectionInput):
@@ -134,7 +163,12 @@ def create_app(
         settings = payload.connection.settings() if payload.connection else Settings()
         try:
             run_id = manager.submit(
-                task, settings, payload.mode, payload.scenario, payload.max_repairs
+                task,
+                settings,
+                payload.mode,
+                payload.scenario,
+                payload.max_repairs,
+                payload.workflow,
             )
         except RuntimeError as exc:
             raise HTTPException(409, str(exc)) from exc

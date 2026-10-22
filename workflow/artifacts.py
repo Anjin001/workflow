@@ -75,6 +75,32 @@ class RunStore:
                 )
         if state.error:
             lines.extend(["", "## 执行错误", "", state.error])
+        if state.workflow:
+            lines.extend(
+                [
+                    "",
+                    "## 流程快照",
+                    "",
+                    f"流程：{state.workflow['name']}。完整配置见 workflow.json，"
+                    "节点输出见 report.json 的 node_runs。",
+                ]
+            )
+        verifications = [
+            run for run in state.node_runs if run["kind"] == "verifier" and run.get("output")
+        ]
+        if verifications:
+            lines.extend(
+                [
+                    "",
+                    "## 候选问题的独立验证",
+                    "",
+                    "审查意见是候选问题；被驳回的候选不进入修复，待确认的问题不能据此宣称通过。",
+                ]
+            )
+            for run in verifications:
+                lines.append(f"\n### v{run['code_version']}\n\n{run['output']['summary']}")
+                for finding in run["output"]["findings"]:
+                    lines.append(f"- {finding['id']} [{finding['verdict']}] {finding['reason']}")
         lines.extend(["", "## 执行步骤", ""])
         lines.extend(
             f"- {event.time} [{event.stage}] v{event.code_version}：{event.message}"
