@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Local secrets and generated files
+.env
+.env.*
+!.env.example
+workspace/
+runs/
+output/
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
