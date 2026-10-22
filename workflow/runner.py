@@ -1,79 +1,103 @@
-"""先读此文件：外层 Workflow 怎样调用 Agent、传数据、决定下一步。"""
-from dataclasses import asdict
-from typing import Callable
+"""流程编排：编码一次，按当前版本验证、审查，并在上限内修复。"""
 
-from .agents import coder, fixer, reviewer
-from .llm import ModelClient
-from .state import WorkflowState
-from .tools import validate_code
+import logging
+from collections.abc import Callable
+
+from .agents import CodingAgent, FixAgent, ReviewAgent
+from .errors import WorkflowError
+from .llm import Model
+from .state import Event, WorkflowState, timestamp
+from .tools import CodeValidator, code_hash
+
+logger = logging.getLogger(__name__)
+Observer = Callable[[WorkflowState, Event], None]
 
 
-def run_workflow(
-    state: WorkflowState,
-    model: ModelClient,
-    on_event: Callable[[str], None] | None = None,
-) -> WorkflowState:
-    """一次调用处理一个新任务。on_event 让入口程序决定怎样显示进度。"""
-    if state.status != "pending" or state.code_version != 0:
-        raise ValueError("请为每次运行创建新的 WorkflowState")
-    if state.max_repairs < 0:
-        raise ValueError("最大修复次数不能小于 0")
+class Workflow:
+    def __init__(
+        self, model: Model, validator: CodeValidator | None = None, output_retries: int = 1
+    ) -> None:
+        self.model = model
+        self.coder = CodingAgent(model, output_retries)
+        self.reviewer = ReviewAgent(model, output_retries)
+        self.fixer = FixAgent(model, output_retries)
+        self.validator = validator or CodeValidator()
 
-    def record(stage: str, message: str) -> None:
-        # 存当前值的副本，保证后续修复不会覆盖历史记录。
-        state.history.append({
-            "stage": stage,
-            "message": message,
-            "code_version": state.code_version,
-            "repair_count": state.repair_count,
-            "code": state.code,
-            "issues": list(state.issues),
-            "validation": asdict(state.validation) if state.validation else None,
-        })
-        if on_event:
-            on_event(f"[{stage}] {message}")
+    def run(self, state: WorkflowState, on_event: Observer | None = None) -> WorkflowState:
+        if state.status != "pending" or state.code_version != 0:
+            raise ValueError("每次运行必须创建新的 WorkflowState")
+        if not 0 <= state.max_repairs <= 10:
+            raise ValueError("max_repairs 必须在 0 至 10 之间")
+        state.started_at = timestamp()
+        state.model_name = self.model.name
+        state.usage = self.model.usage
 
-    try:
-        state.status = "running"
-
-        # 1. 编码只执行一次，后续由修复 Agent 处理已有代码。
-        state.code = coder(state.requirement, model)
-        state.code_version = 1
-        record("coder", "已生成第 1 版代码")
-
-        while True:
-            # 2. 每轮都重新检查当前代码，再把证据交给审查 Agent。
-            state.validation = validate_code(state.code, state.code_version)
-            record("validate", "验收通过" if state.validation.passed else "验收未通过")
-            state.issues = reviewer(state.requirement, state.code, state.validation, model)
-            record("reviewer", f"审查发现 {len(state.issues)} 个问题")
-
-            # 3. 模型认为没问题还不够，固定验收也必须通过。
-            if not state.issues and state.validation.passed:
-                state.status = "completed"
-                record("end", "当前代码通过验收，且审查未提出待处理问题")
-                return state
-
-            # 4. 有限次数循环：0 次表示只编码和检查，不执行修复。
-            if state.repair_count >= state.max_repairs:
-                state.status = "needs_changes"
-                record("end", "达到修复次数上限，仍有待处理问题")
-                return state
-
-            # 5. 把原始需求、当前代码和问题一起交给修复 Agent。
-            state.code = fixer(
-                state.requirement, state.code, state.issues, state.validation, model
+        def emit(stage: str, message: str, notify: bool = True) -> Event:
+            event = Event(
+                timestamp(),
+                stage,
+                state.status,
+                state.code_version,
+                state.repair_count,
+                message,
             )
-            state.repair_count += 1
-            state.code_version += 1
-            # 新代码不能沿用旧版本的结论，下一轮重新验证和审查。
-            state.issues = []
-            state.validation = None
-            record("fixer", f"第 {state.repair_count} 次修复，生成第 {state.code_version} 版代码")
+            state.history.append(event)
+            logger.info("[%s] v%s %s", stage, state.code_version, message)
+            if notify and on_event:
+                on_event(state, event)
+            return event
 
-    except Exception as exc:
-        # 异常是执行失败，不能伪装成审查通过。
-        state.status = "failed"
-        state.error = f"{type(exc).__name__}: {exc}"
-        record("error", state.error)
-        return state
+        def finish(status: str, message: str) -> WorkflowState:
+            state.status = status
+            state.finished_at = timestamp()
+            emit("end", message)
+            return state
+
+        try:
+            state.status = "running"
+            emit("start", f"开始任务：{state.task.id}")
+            result = self.coder.run(state.task)
+            state.code = result.code
+            state.code_version = 1
+            emit("coder", result.summary)
+
+            while True:
+                state.validation = self.validator.validate(
+                    state.task, state.code, state.code_version
+                )
+                # 防止替换验证器后意外使用旧版本的检查结论。
+                if (
+                    state.validation.code_version != state.code_version
+                    or state.validation.code_hash != code_hash(state.code)
+                ):
+                    raise WorkflowError("验证结果与当前代码版本不匹配")
+                emit("validate", state.validation.details)
+
+                state.review = self.reviewer.run(
+                    state.task, state.code, state.code_version, state.validation
+                )
+                emit("reviewer", f"{state.review.summary} 问题数：{len(state.review.issues)}")
+
+                if state.validation.passed and not state.review.issues:
+                    return finish("completed", "当前版本通过验收，且审查无待处理问题")
+                if state.repair_count >= state.max_repairs:
+                    return finish("needs_changes", "达到修复次数上限，仍有问题需要处理")
+
+                result = self.fixer.run(
+                    state.task, state.code, state.code_version, state.review, state.validation
+                )
+                state.code = result.code
+                state.code_version += 1
+                state.repair_count += 1
+                # 新代码必须重新检查，旧版本的审查意见只保留在历史快照中。
+                state.review = None
+                state.validation = None
+                emit("fixer", result.summary)
+        except Exception as exc:
+            state.status = "failed"
+            state.error = f"{type(exc).__name__}: {exc}"
+            state.finished_at = timestamp()
+            event = emit("error", state.error, notify=False)
+            if on_event:
+                on_event(state, event)
+            return state

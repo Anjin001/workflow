@@ -1,0 +1,12 @@
+{
+  "id": "average",
+  "requirement": "实现 average(numbers)，接收整数或浮点数列表，返回算术平均值；空列表返回 0，不修改输入列表。",
+  "function_name": "average",
+  "cases": [
+    {"name": "普通整数", "args": [[2, 4, 6]], "expected": 4, "check_input_unchanged": true},
+    {"name": "空列表", "args": [[]], "expected": 0},
+    {"name": "正负抵消", "args": [[-2, 2]], "expected": 0},
+    {"name": "小数结果", "args": [[1, 2]], "expected": 1.5},
+    {"name": "浮点输入", "kwargs": {"numbers": [0.1, 0.2]}, "expected": 0.15, "tolerance": 0.000001}
+  ]
+}

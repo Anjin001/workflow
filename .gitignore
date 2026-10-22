@@ -1,4 +1,3 @@
-# Python
 __pycache__/
 *.py[cod]
 .venv/
@@ -6,13 +5,14 @@ venv/
 .pytest_cache/
 .ruff_cache/
 *.egg-info/
-
-# Local secrets and generated files
+.coverage
+htmlcov/
 .env
 .env.*
 !.env.example
-workspace/
 runs/
+dist/
+workspace/
 output/
 .idea/
 .vscode/

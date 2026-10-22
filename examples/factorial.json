@@ -1,0 +1,13 @@
+{
+  "id": "factorial",
+  "requirement": "实现 factorial(n)，返回非负整数 n 的阶乘。0 的阶乘为 1；负整数抛出 ValueError；非整数及布尔值抛出 TypeError。",
+  "function_name": "factorial",
+  "cases": [
+    {"name": "零阶乘", "args": [0], "expected": 1},
+    {"name": "一阶乘", "args": [1], "expected": 1},
+    {"name": "普通正整数", "args": [5], "expected": 120},
+    {"name": "负数拒绝", "args": [-1], "raises": "ValueError"},
+    {"name": "浮点拒绝", "args": [2.5], "raises": "TypeError"},
+    {"name": "布尔拒绝", "args": [true], "raises": "TypeError"}
+  ]
+}

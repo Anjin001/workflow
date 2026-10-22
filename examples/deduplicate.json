@@ -1,0 +1,11 @@
+{
+  "id": "deduplicate",
+  "requirement": "实现 deduplicate(items)，接收整数列表，返回去重后的新列表，并保留每个值第一次出现的顺序。空列表返回空列表，不修改输入。",
+  "function_name": "deduplicate",
+  "cases": [
+    {"name": "保留出现顺序", "args": [[3, 1, 3, 2, 1]], "expected": [3, 1, 2], "check_input_unchanged": true},
+    {"name": "空列表", "args": [[]], "expected": []},
+    {"name": "全部重复", "args": [[2, 2, 2]], "expected": [2]},
+    {"name": "负数与零", "args": [[0, -1, 0, 2, -1]], "expected": [0, -1, 2]}
+  ]
+}
