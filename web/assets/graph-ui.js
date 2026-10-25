@@ -45,7 +45,9 @@ window.workflowEditor = (() => {
     library = [],
     previousView = "welcome",
     ready = false;
-  let refitNext = true;
+  let editorZoom = 1;
+  let rolePrompts = {};
+  let loadError = "";
   let inspectedRunNode = null,
     inspectedVisit = null;
 
@@ -77,10 +79,9 @@ window.workflowEditor = (() => {
   }
   function open() {
     if (!ready) {
-      toast("流程正在载入，请稍后重试");
+      toast(loadError || "流程正在载入，请稍后重试");
       return;
     }
-    refitNext = true;
     previousView = $("result").hidden ? "welcome" : "result";
     $("welcome").hidden = true;
     $("result").hidden = true;
@@ -95,7 +96,6 @@ window.workflowEditor = (() => {
   }
   function loadDraft(definition, identifier = null) {
     draft = clone(definition);
-    refitNext = true;
     libraryId = identifier;
     selectedNode = null;
     selectedEdge = -1;
@@ -104,6 +104,22 @@ window.workflowEditor = (() => {
     $("graph-name").value = draft.name;
     $("graph-dirty").textContent = "载入后可编辑，保存后用于新任务";
     feedback("选择节点查看职责，选择连线可在该位置插入角色。");
+    render();
+  }
+  function setEditorZoom(value) {
+    editorZoom = Math.max(0.35, Math.min(1.5, Number(value) || 1));
+    const select = $("graph-zoom");
+    select.querySelector("[data-fit-scale]")?.remove();
+    if (
+      ![...select.options].some((option) => Number(option.value) === editorZoom)
+    ) {
+      const option = document.createElement("option");
+      option.value = String(editorZoom);
+      option.textContent = `${Math.round(editorZoom * 100)}%（适应结果）`;
+      option.dataset.fitScale = "true";
+      select.append(option);
+    }
+    select.value = String(editorZoom);
     render();
   }
   function graphSize(definition) {
@@ -152,10 +168,8 @@ window.workflowEditor = (() => {
     GraphView.mount(
       canvas,
       graphSize(definition),
-      options.readonly ? "auto" : $("graph-zoom").value,
-      !options.readonly && refitNext,
+      options.readonly ? 1 : editorZoom,
     );
-    if (!options.readonly) refitNext = false;
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.setAttribute("class", "graph-edges");
     paintEdges(svg, definition, options);
@@ -433,11 +447,15 @@ window.workflowEditor = (() => {
     let html =
       '<h3>节点与连线</h3><p class="field-help">自定义角色可以放在主路径、修复路径或完成前。核心节点保留明确的输入输出与顺序约束。</p>';
     if (node) {
-      html = `<h3>${escapeHtml(titles[node.kind])}</h3><p class="field-help">${escapeHtml(descriptions[node.kind])}</p><label>角色名称<input id="node-name" maxlength="60" value="${escapeHtml(node.name)}"></label>`;
-      if (
-        ["custom", "coder", "reviewer", "fixer", "verifier"].includes(node.kind)
-      )
-        html += `<label>${node.kind === "custom" ? "职责与提示词" : "补充关注点"}<textarea id="node-prompt" maxlength="6000" placeholder="写清职责、要检查的内容和输出建议…">${escapeHtml(node.prompt)}</textarea></label>`;
+      html = `<h3>${escapeHtml(titles[node.kind])}</h3><label>角色名称<input id="node-name" maxlength="60" value="${escapeHtml(node.name)}"></label><label>角色说明<textarea id="node-description" class="role-description" maxlength="2000">${escapeHtml(node.description || descriptions[node.kind])}</textarea></label>`;
+      if (node.kind === "custom") {
+        html += `<label>自定义 Prompt（发送给模型）<textarea id="node-prompt" maxlength="6000" placeholder="写清角色职责、分析步骤、证据要求和建议…">${escapeHtml(node.prompt)}</textarea></label><p class="field-help">这才是自定义提示词，支持完整编辑。名称和说明单独保存；系统另加统一 JSON 输出约束。</p><details class="prompt-details"><summary>查看系统输出约束</summary><pre>${escapeHtml(rolePrompts.custom)}</pre></details>`;
+      } else if (rolePrompts[node.kind]) {
+        html += `<details class="prompt-details" open><summary>内置系统 Prompt（已启用，只读）</summary><textarea class="base-prompt" aria-label="内置系统 Prompt" readonly>${escapeHtml(rolePrompts[node.kind])}</textarea></details><label>补充 Prompt（可选）<textarea id="node-prompt" maxlength="6000" placeholder="例如：额外关注输入边界或算法复杂度。留空仍使用完整内置 Prompt。">${escapeHtml(node.prompt)}</textarea></label><p class="field-help">内置提示词始终启用。补充框只填写额外要求，留空不会取消默认 Prompt。</p>`;
+      } else {
+        html +=
+          '<p class="graph-feedback">这是程序控制或验收工具节点，不调用大模型，因此没有 Prompt。</p>';
+      }
       if (node.kind === "custom")
         html += `<p class="field-help">读取的信息（尚未产生的信息会在结构检查时阻止）：</p>${Object.entries(
           inputTitles,
@@ -466,6 +484,7 @@ window.workflowEditor = (() => {
       $("apply-node").onclick = () => {
         remember();
         node.name = $("node-name").value.trim();
+        node.description = $("node-description").value.trim();
         if ($("node-prompt")) node.prompt = $("node-prompt").value.trim();
         if (node.kind === "custom")
           node.inputs = [
@@ -598,6 +617,7 @@ window.workflowEditor = (() => {
       id: `${kind}_${crypto.randomUUID().slice(0, 8)}`,
       kind,
       name: kind === "verifier" ? "问题验证者" : "自定义分析员",
+      description: descriptions[kind],
       prompt:
         kind === "custom"
           ? "分析上游输出，对照原始任务给出具体建议；说明依据与不确定之处。"
@@ -642,7 +662,6 @@ window.workflowEditor = (() => {
   }
   function layout() {
     remember();
-    refitNext = true;
     const main = [],
       visited = new Set();
     let current = draft.nodes.find((n) => n.kind === "start")?.id;
@@ -781,14 +800,11 @@ window.workflowEditor = (() => {
     $("add-custom").onclick = () => addNode("custom");
     $("add-verifier").onclick = () => addNode("verifier");
     $("graph-layout").onclick = layout;
-    $("graph-zoom").onchange = () => {
-      refitNext = true;
-      render();
-    };
+    $("graph-zoom").onchange = () =>
+      setEditorZoom(Number($("graph-zoom").value));
     $("graph-fit").onclick = () => {
-      $("graph-zoom").value = "auto";
-      refitNext = true;
-      render();
+      const width = $("graph-scroll").clientWidth;
+      setEditorZoom(GraphView.fitScale(width, graphSize(draft).width));
     };
     $("cancel-connection").onclick = cancelLink;
     document.addEventListener("keydown", (event) => {
@@ -860,6 +876,11 @@ window.workflowEditor = (() => {
     });
     try {
       const data = await api("/api/bootstrap");
+      if (!data.role_prompts)
+        throw new Error(
+          "后台仍是旧版本，请关闭原启动窗口并重新双击 start.bat。",
+        );
+      rolePrompts = data.role_prompts;
       templates = data.workflow_templates;
       let stored = null;
       try {
@@ -883,7 +904,8 @@ window.workflowEditor = (() => {
       loadDraft(active, activeId);
     } catch (error) {
       feedback(error.message, true);
-      toast("流程载入失败，请刷新页面后重试。");
+      loadError = error.message;
+      toast(loadError);
     }
   }
   init();

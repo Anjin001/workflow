@@ -12,7 +12,7 @@
     );
   }
 
-  function mount(canvas, size, mode, refit = false) {
+  function mount(canvas, size, requestedScale = 1) {
     let view = views.get(canvas);
     if (!view) {
       const viewport = canvas.parentElement;
@@ -20,33 +20,11 @@
       surface.className = "graph-surface";
       viewport.replaceChild(surface, canvas);
       surface.append(canvas);
-      view = { viewport, surface, scale: 1, mode: null, size };
+      view = { surface, scale: 1 };
       views.set(canvas, view);
-      if (typeof ResizeObserver !== "undefined") {
-        let previousWidth = viewport.clientWidth;
-        const observer = new ResizeObserver(() => {
-          if (!canvas.isConnected) {
-            observer.disconnect();
-            return;
-          }
-          const width = viewport.clientWidth;
-          if (width > 0 && Math.abs(width - previousWidth) >= 1) {
-            previousWidth = width;
-            if (view.mode === "auto") mount(canvas, view.size, "auto", true);
-          }
-        });
-        observer.observe(viewport);
-      }
     }
-    view.size = size;
-    // 节点选中、端口选中和普通重绘不会重复“适应画布”。
-    if (view.mode !== mode || refit) {
-      view.scale =
-        mode === "auto"
-          ? fitScale(view.viewport.clientWidth || size.width, size.width)
-          : Math.max(0.35, Math.min(1.5, Number(mode) || 1));
-    }
-    view.mode = mode;
+    // 此处只消费用户指定的数值，不观察布局、不测量可用宽度、不自动适配。
+    view.scale = Math.max(0.35, Math.min(1.5, Number(requestedScale) || 1));
     canvas.style.removeProperty("zoom");
     canvas.style.width = `${size.width}px`;
     canvas.style.height = `${size.height}px`;

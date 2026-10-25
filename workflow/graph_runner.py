@@ -149,7 +149,11 @@ class GraphWorkflow:
                         "upstream_node": upstream["node_id"] if upstream else None,
                     }
                     output = JsonAgent(
-                        self.model, "custom", CUSTOM_PROMPT + node.prompt, self.retries
+                        self.model,
+                        "custom",
+                        CUSTOM_PROMPT + f"名称：{node.name}\n说明：{node.description}\n"
+                        f"自定义 Prompt：\n{node.prompt}",
+                        self.retries,
                     ).ask(payload, parse_analysis)
                 elif node.kind == "gate":
                     if (

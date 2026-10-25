@@ -18,8 +18,11 @@ from .agents import CodingAgent
 from .config import Settings
 from .errors import WorkflowError
 from .graph import GraphLibrary, default_graph, parse_graph
+from .graph_runner import CUSTOM_PROMPT
 from .llm import ChatModel, Model
+from .prompts import CODER_PROMPT, FIXER_PROMPT, REVIEWER_PROMPT
 from .task import TaskSpec, load_task
+from .verification import VERIFIER_PROMPT
 from .web_models import ConnectionInput, PrepareInput, RunInput, SaveWorkflowInput, check_connection
 from .web_service import JobManager
 
@@ -112,6 +115,13 @@ def create_app(
             "examples": examples,
             "history": manager.history(),
             "workflow_templates": [default_graph().model_dump(), default_graph(True).model_dump()],
+            "role_prompts": {
+                "coder": CODER_PROMPT,
+                "reviewer": REVIEWER_PROMPT,
+                "fixer": FIXER_PROMPT,
+                "verifier": VERIFIER_PROMPT,
+                "custom": CUSTOM_PROMPT,
+            },
         }
 
     @app.get("/api/workflows")

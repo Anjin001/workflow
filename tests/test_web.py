@@ -99,6 +99,23 @@ def test_home_assets_and_examples_are_available(client):
     assert len(client.get("/api/bootstrap").json()["examples"]) == 3
 
 
+def test_builtin_prompts_are_visible_and_match_the_runtime_prompts(client):
+    from workflow.graph_runner import CUSTOM_PROMPT
+    from workflow.prompts import CODER_PROMPT, FIXER_PROMPT, REVIEWER_PROMPT
+    from workflow.verification import VERIFIER_PROMPT
+
+    prompts = client.get("/api/bootstrap").json()["role_prompts"]
+    assert prompts == {
+        "coder": CODER_PROMPT,
+        "reviewer": REVIEWER_PROMPT,
+        "fixer": FIXER_PROMPT,
+        "verifier": VERIFIER_PROMPT,
+        "custom": CUSTOM_PROMPT,
+    }
+    assert all(prompts.values())
+    assert 'value="auto"' not in client.get("/").text
+
+
 def test_request_without_page_token_is_rejected(client):
     client.headers.pop("X-Workflow-Token")
     assert client.get("/api/runs").status_code == 403

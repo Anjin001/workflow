@@ -33,6 +33,7 @@ class Node(BaseModel):
     id: str = Field(pattern=r"^[a-zA-Z][a-zA-Z0-9_-]{0,39}$")
     kind: Kind
     name: str = Field(min_length=1, max_length=60)
+    description: str = Field(default="", max_length=2000)
     prompt: str = Field(default="", max_length=6000)
     inputs: list[Literal["task", "code", "validation", "review", "verification", "upstream"]] = (
         Field(default_factory=lambda: ["task", "upstream"], max_length=6)

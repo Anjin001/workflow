@@ -153,6 +153,27 @@ def test_analysis_crosses_tool_node_but_not_a_code_revision(task):
     assert model.reviews[1]["upstream"]["advice"] == []
 
 
+def test_custom_description_and_prompt_are_saved_and_sent_to_model(task):
+    graph = insert(default_graph(), "start", "coder", "analyst")
+    graph.nodes[-1].description = "只分析需求中的边界条件。"
+    graph.nodes[-1].prompt = "列出空输入与异常情况，并分别给出依据。"
+
+    class CaptureModel(MockModel):
+        system_prompt = ""
+
+        def complete(self, role, messages):
+            if role == "custom":
+                self.system_prompt = messages[0]["content"]
+            return super().complete(role, messages)
+
+    model = CaptureModel(task)
+    result = GraphWorkflow(model, graph).run(WorkflowState(task))
+    assert result.status == "completed"
+    assert graph.nodes[-1].description in model.system_prompt
+    assert graph.nodes[-1].prompt in model.system_prompt
+    assert result.workflow["nodes"][-1]["description"] == graph.nodes[-1].description
+
+
 def test_custom_node_after_gate_executes_only_on_pass(task):
     graph = insert(default_graph(), "gate", "end", "docs")
     result = GraphWorkflow(MockModel(task, "stuck"), graph).run(WorkflowState(task, 0))

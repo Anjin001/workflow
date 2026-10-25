@@ -523,3 +523,32 @@
   text-overflow: ellipsis;
   height: 40px;
 }
+
+.graph-inspector .role-description {
+  min-height: 80px;
+}
+.prompt-details {
+  margin: 16px 0;
+}
+.prompt-details summary {
+  font-size: 13px;
+  color: #315c49;
+  cursor: pointer;
+}
+.prompt-details pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  line-height: 1.7;
+  background: #f1f5ed;
+  padding: 12px;
+  max-height: 360px;
+  overflow: auto;
+}
+.graph-inspector .base-prompt {
+  min-height: 300px;
+  font-size: 12px;
+  line-height: 1.7;
+  background: #f3f6f0;
+  margin-top: 10px;
+}
