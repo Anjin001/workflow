@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parent
 
 
 def parser() -> argparse.ArgumentParser:
-    arguments = argparse.ArgumentParser(description="Homework 2：多 Agent 代码审查流程")
+    arguments = argparse.ArgumentParser(description="多 Agent 代码审查流程")
     arguments.add_argument("--task", type=Path, default=ROOT / "examples" / "average.json")
     arguments.add_argument("--mock", action="store_true", help="使用固定样例离线运行，不调用 API")
     arguments.add_argument(

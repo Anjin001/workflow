@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="/assets/style.css" />
     <link rel="stylesheet" href="/assets/graph.css" />
     <script src="/assets/app.js" defer></script>
+    <script src="/assets/graph-view.js" defer></script>
     <script src="/assets/graph-ui.js" defer></script>
   </head>
   <body>
@@ -121,10 +122,14 @@
               <option value="1">100%</option>
               <option value="1.25">125%</option>
             </select></label
+          ><button id="graph-fit" class="quiet-button">适应画布</button
+          ><button id="cancel-connection" class="quiet-button" hidden>
+            取消连线</button
           ><span id="graph-dirty" class="muted">未保存</span>
         </div>
         <p class="graph-instructions">
-          拖动卡片顶部调整位置。点击出口，再点击另一节点入口即可连线；也可使用右侧连线表单。选中一条连线后添加角色，会自动插入该位置。
+          拖动卡片顶部移动节点；从右侧出口拖到目标入口或卡片即可连线，也支持依次点击。选中连线后可在右侧更换目标；Esc
+          取消连线。
         </p>
         <div
           id="graph-feedback"
@@ -462,7 +467,7 @@
       </ol>
       <p class="field-help">
         目前支持 Python
-        单文件同步函数。验收会在本机运行生成的代码，建议用于自己的课程样例。
+        单文件同步函数。验收会在本机运行生成的代码，请仅运行可信任务。
       </p>
     </dialog>
     <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>

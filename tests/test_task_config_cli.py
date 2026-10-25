@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 import main
-from scripts.package_submission import build_archive
+from scripts.package_source import build_archive
 from workflow.config import Settings
 from workflow.task import TaskSpec
 
@@ -76,8 +76,8 @@ def test_cli_returns_nonzero_for_unresolved_problem(tmp_path):
     assert main.main(["--mock", "--scenario", "stuck", "--output", str(tmp_path)]) == 1
 
 
-def test_submission_archive_excludes_local_data_and_can_run_after_extraction(tmp_path):
-    archive_path = build_archive("测试提交", tmp_path)
+def test_source_archive_excludes_local_data_and_can_run_after_extraction(tmp_path):
+    archive_path = build_archive("测试源码包", tmp_path)
     with zipfile.ZipFile(archive_path) as archive:
         names = archive.namelist()
         assert not any(
@@ -86,10 +86,17 @@ def test_submission_archive_excludes_local_data_and_can_run_after_extraction(tmp
             for part in Path(name).parts
         )
         assert any(name.endswith("/.env.example") for name in names)
-        for required in ("start.bat", "start.py", "web/index.html", "web/assets/app.js"):
-            assert f"测试提交/{required}" in names
+        for required in (
+            "start.bat",
+            "start.py",
+            "web/index.html",
+            "web/assets/app.js",
+            "web/assets/graph-view.js",
+            "tests/graph_view.test.cjs",
+        ):
+            assert f"测试源码包/{required}" in names
         archive.extractall(tmp_path / "extract")
-    extracted = tmp_path / "extract" / "测试提交"
+    extracted = tmp_path / "extract" / "测试源码包"
     process = subprocess.run(
         [sys.executable, "-X", "utf8", "main.py", "--mock"],
         cwd=extracted,
@@ -98,7 +105,7 @@ def test_submission_archive_excludes_local_data_and_can_run_after_extraction(tmp
         encoding="utf-8",
     )
     assert process.returncode == 0, process.stderr
-    assert archive_path.stat().st_size < 200_000_000
+    assert archive_path.stat().st_size > 0
 
 
 def test_packaging_refuses_path_names_and_overwrites(tmp_path):

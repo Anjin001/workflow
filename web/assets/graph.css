@@ -410,3 +410,116 @@
     height: 400px;
   }
 }
+
+/* 布局尺寸与视觉缩放分离，避免反复测量已缩放的内容。 */
+.graph-scroll {
+  min-width: 0;
+  contain: inline-size;
+}
+.graph-surface {
+  position: relative;
+  overflow: clip;
+}
+.graph-surface > .graph-canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+}
+.graph-canvas .flow-node {
+  min-height: 112px;
+}
+.graph-canvas .flow-node.gate {
+  min-height: 132px;
+}
+.graph-canvas .node-ports {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  pointer-events: none;
+}
+.graph-canvas .node-port {
+  position: absolute;
+  left: -16px;
+  top: 64px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 2px solid #91af9c;
+  border-radius: 50%;
+  background: #fff;
+  cursor: crosshair;
+  pointer-events: auto;
+  touch-action: none;
+}
+.graph-canvas .node-port::after {
+  content: "";
+  display: block;
+  width: 10px;
+  height: 10px;
+  margin: auto;
+  background: #7c9e88;
+  border-radius: 50%;
+}
+.graph-canvas .node-port.output {
+  left: auto;
+  right: -16px;
+}
+.graph-canvas .gate .node-port.output.pass {
+  top: 50px;
+}
+.graph-canvas .gate .node-port.output.repair {
+  top: 88px;
+  border-color: #c2a16d;
+}
+.graph-canvas .node-port:hover,
+.graph-canvas .node-port:focus-visible {
+  outline: 3px solid #b5d9c7;
+  outline-offset: 3px;
+}
+.graph-canvas .node-port.source-active {
+  background: #22795f;
+  border-color: #22795f;
+}
+.graph-canvas .node-port.source-active::after {
+  background: #fff;
+}
+.port-caption {
+  position: absolute;
+  right: 24px;
+  top: 71px;
+  color: #6b816f;
+  font-size: 11px;
+}
+.gate .port-caption.pass {
+  top: 57px;
+}
+.gate .port-caption.repair {
+  top: 95px;
+  color: #9c7945;
+}
+.flow-node.connection-target .node-port.input {
+  background: #e4f5ea;
+  border-color: #2d926a;
+  box-shadow: 0 0 0 5px #55b98720;
+}
+.flow-node.connection-target .flow-node-head {
+  cursor: crosshair;
+}
+.flow-node.connection-target:hover {
+  outline: 2px solid #58a980;
+}
+.connection-preview {
+  fill: none;
+  stroke: #258465;
+  stroke-width: 2.5;
+  stroke-dasharray: 6 4;
+  pointer-events: none;
+}
+
+.graph-canvas .flow-node-head {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  height: 40px;
+}

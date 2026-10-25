@@ -91,6 +91,11 @@ def test_home_assets_and_examples_are_available(client):
     assert "把需求交给你的代码团队" in client.get("/").text
     assert client.get("/assets/app.js").status_code == 200
     assert client.get("/assets/style.css").status_code == 200
+    assert client.get("/assets/graph-view.js").status_code == 200
+    page = client.get("/").text
+    assert page.index("/assets/graph-view.js") < page.index("/assets/graph-ui.js")
+    assert 'id="graph-fit"' in page
+    assert 'id="cancel-connection"' in page
     assert len(client.get("/api/bootstrap").json()["examples"]) == 3
 
 

@@ -1,6 +1,6 @@
 # 多 Agent 代码审查 Workflow
 
-软件工程 Homework 2：三个 Agent 协作完成 **编码、审查、修复**，通过共享状态与固定验收用例控制修复循环。
+通过多个 Agent 协作完成 **编码、审查、修复**，通过共享状态与固定验收用例控制修复循环。
 
 支持网页设置模型、自定义需求、图形化验收编辑、真实模型调用、执行日志、版本对比与结果下载。保留命令行入口，底层不依赖复杂调度框架。
 
@@ -150,7 +150,7 @@ LLM_MODEL=deepseek-flash
 
 发生错误后已保存的步骤可用于诊断；当前不支持从快照自动续跑。模型未提供用量时 Token 数为 0，不能据此理解为没有计费。网页支持步骤边界停止，状态为 cancelled；服务关闭前未结束的记录重开后显示为中断。
 
-验收在带超时的子进程与临时目录中执行，**不是安全沙箱**。仅运行自己的课程样例；执行不可信外部代码需要容器等独立隔离。
+验收在带超时的子进程与临时目录中执行，**不是安全沙箱**。仅运行可信的代码；执行不可信外部代码需要容器等独立隔离。
 
 ## 测试与代码检查
 
@@ -185,23 +185,27 @@ workflow/
   web_service.py          后台运行、历史与协作式停止
 examples/                 三个完整任务
 tests/                    自动化测试
-docs/                     作业对应说明、演示步骤
-scripts/package_submission.py  提交打包
+docs/                     功能说明、使用指南与演示步骤
+scripts/package_source.py  源码打包
 ```
 
 建议先读 state、runner，再看 agents、prompts、llm；网页交互从 web.py 和 web/assets/app.js 开始。架构和扩展位置见 [Design.md](Design.md)。
 
-## 作业提交
-
-本项目对应 Homework 2 的代码审查方向，要求映射见 [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md)。一分钟演示步骤见 [docs/DEMO.md](docs/DEMO.md)。
+## 源码打包
 
 ```powershell
-.\.venv\Scripts\python.exe scripts/package_submission.py --name "自己的学号姓名"
+.\.venv\Scripts\python.exe scripts/package_source.py --name "workflow-source"
 ```
 
-压缩包位于 `dist/`，包含启动文件、网页、源码、配置示例、任务、测试和文档，排除 `.env`、`.git`、虚拟环境和运行输出。同名文件已存在时拒绝覆盖。
+压缩包位于 `dist/`，包含启动文件、网页、源码、配置示例、任务、测试和文档，排除 `.env`、`.git`、虚拟环境、本机流程库和运行输出。同名文件已存在时拒绝覆盖。
 
-按课件将小于 200 MB 的“学号姓名”压缩包提交至“002Homework2”；截止时间为北京时间 2026 年 10 月 25 日 24:00。仓库当前为私有，如通过链接供老师检查，需要你按课程要求提供访问方式。演示视频不超过一分钟，为可选项。
+功能范围见 [docs/FEATURES.md](docs/FEATURES.md)，快速演示见 [docs/DEMO.md](docs/DEMO.md)。
+
+前端缩放和连线几何的回归测试可以使用 Node.js 运行；日常启动网页不需要 Node.js：
+
+```powershell
+node --test tests/graph_view.test.cjs
+```
 
 ## 接口依据
 

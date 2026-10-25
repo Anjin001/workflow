@@ -45,6 +45,7 @@ window.workflowEditor = (() => {
     library = [],
     previousView = "welcome",
     ready = false;
+  let refitNext = true;
   let inspectedRunNode = null,
     inspectedVisit = null;
 
@@ -79,6 +80,7 @@ window.workflowEditor = (() => {
       toast("流程正在载入，请稍后重试");
       return;
     }
+    refitNext = true;
     previousView = $("result").hidden ? "welcome" : "result";
     $("welcome").hidden = true;
     $("result").hidden = true;
@@ -93,6 +95,7 @@ window.workflowEditor = (() => {
   }
   function loadDraft(definition, identifier = null) {
     draft = clone(definition);
+    refitNext = true;
     libraryId = identifier;
     selectedNode = null;
     selectedEdge = -1;
@@ -109,56 +112,25 @@ window.workflowEditor = (() => {
       height: Math.max(680, ...definition.nodes.map((n) => n.y + 180)),
     };
   }
-  function draw(canvas, definition, options = {}) {
-    canvas.replaceChildren();
-    const size = graphSize(definition);
-    const mode = options.readonly ? "auto" : $("graph-zoom").value;
-    const width = canvas.parentElement.clientWidth;
-    canvas.style.zoom = String(
-      mode === "auto"
-        ? Math.max(0.4, Math.min(1, ((width || size.width) - 16) / size.width))
-        : Number(mode),
-    );
-    canvas.style.width = `${size.width}px`;
-    canvas.style.height = `${size.height}px`;
-    const ns = "http://www.w3.org/2000/svg";
-    const svg = document.createElementNS(ns, "svg");
-    svg.setAttribute("class", "graph-edges");
-    svg.setAttribute("width", size.width);
-    svg.setAttribute("height", size.height);
-    svg.innerHTML =
-      '<defs><marker id="flow-arrow-' +
-      (options.readonly ? "run" : "edit") +
-      '" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8" fill="#94a58d"/></marker></defs>';
+  function paintEdges(svg, definition, options = {}) {
+    const ns = "http://www.w3.org/2000/svg",
+      size = graphSize(definition);
+    svg.replaceChildren();
+    const markerId = options.readonly ? "run-arrow" : "edit-arrow";
+    svg.innerHTML = `<defs><marker id="${markerId}" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8" fill="#7d9687"/></marker></defs>`;
     definition.edges.forEach((edge, index) => {
-      const source = definition.nodes.find((n) => n.id === edge.source),
-        target = definition.nodes.find((n) => n.id === edge.target);
-      if (!source || !target) return;
-      const backwards = target.x < source.x;
-      const sx = backwards ? source.x : source.x + 190,
-        sy = source.y + 55,
-        tx = backwards ? target.x + 190 : target.x,
-        ty = target.y + 55;
-      const path = document.createElementNS(ns, "path");
-      const bend = Math.max(70, Math.abs(tx - sx) * 0.45);
-      let route = backwards
-        ? `M${sx},${sy} C${sx - bend},${sy} ${tx + bend},${ty} ${tx},${ty}`
-        : `M${sx},${sy} C${sx + bend},${sy} ${tx - bend},${ty} ${tx},${ty}`;
-      if (target.kind === "validate" && target.y < source.y) {
-        const lane = size.width - 18,
-          bottom = size.height - 30;
-        route = `M${source.x + 95},${source.y + 105} L${source.x + 95},${bottom} Q${source.x + 95},${bottom + 12} ${source.x + 110},${bottom + 12} L${lane - 12},${bottom + 12} Q${lane},${bottom + 12} ${lane},${bottom} L${lane},${ty} Q${lane},${ty} ${target.x + 190},${ty}`;
-      }
-      path.setAttribute("d", route);
-      path.setAttribute(
+      const from = definition.nodes.find((n) => n.id === edge.source),
+        to = definition.nodes.find((n) => n.id === edge.target);
+      if (!from || !to) return;
+      const route = GraphView.edgePath(from, to, edge.condition, size);
+      const line = document.createElementNS(ns, "path");
+      line.setAttribute("d", route);
+      line.setAttribute(
         "class",
         `graph-edge ${edge.condition}${!options.readonly && selectedEdge === index ? " selected" : ""}`,
       );
-      path.setAttribute(
-        "marker-end",
-        `url(#flow-arrow-${options.readonly ? "run" : "edit"})`,
-      );
-      svg.append(path);
+      line.setAttribute("marker-end", `url(#${markerId})`);
+      svg.append(line);
       if (!options.readonly) {
         const hit = document.createElementNS(ns, "path");
         hit.setAttribute("d", route);
@@ -168,31 +140,39 @@ window.workflowEditor = (() => {
           selectedNode = null;
           linkSource = null;
           render();
+          feedback("连线已选中。右侧已载入起点、出口与终点，可直接调整。");
         });
         svg.append(hit);
       }
-      if (edge.condition !== "always") {
-        const label = document.createElementNS(ns, "text");
-        label.setAttribute("x", sx + 20);
-        label.setAttribute("y", sy - 13);
-        label.setAttribute("class", "edge-label");
-        label.textContent = edge.condition === "pass" ? "通过" : "需修复";
-        svg.append(label);
-      }
     });
+  }
+
+  function draw(canvas, definition, options = {}) {
+    canvas.replaceChildren();
+    GraphView.mount(
+      canvas,
+      graphSize(definition),
+      options.readonly ? "auto" : $("graph-zoom").value,
+      !options.readonly && refitNext,
+    );
+    if (!options.readonly) refitNext = false;
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", "graph-edges");
+    paintEdges(svg, definition, options);
     canvas.append(svg);
     definition.nodes.forEach((node) => {
       const runs =
         options.report?.node_runs?.filter((r) => r.node_id === node.id) || [];
-      const last = runs.at(-1);
-      const status = last?.status || "pending";
+      const status = runs.at(-1)?.status || "pending";
       const card = document.createElement("div");
+      card.dataset.nodeId = node.id;
       card.className = `flow-node ${node.kind} ${options.readonly ? status : ""} ${(options.readonly ? inspectedRunNode : selectedNode) === node.id ? "selected" : ""}`;
       card.style.left = `${node.x}px`;
       card.style.top = `${node.y}px`;
       const head = document.createElement("button");
       head.className = "flow-node-head";
       head.textContent = node.name;
+      head.title = node.name;
       head.setAttribute(
         "aria-label",
         `${options.readonly ? "查看" : "选择"}节点 ${node.name}`,
@@ -202,7 +182,13 @@ window.workflowEditor = (() => {
           inspectedRunNode = node.id;
           inspectedVisit = null;
           options.onSelect(node.id);
-        } else {
+        } else if (
+          linkSource &&
+          linkSource.id !== node.id &&
+          node.kind !== "start"
+        )
+          connectTarget(node.id);
+        else {
           selectedNode = node.id;
           selectedEdge = -1;
           render();
@@ -223,7 +209,9 @@ window.workflowEditor = (() => {
         ports.className = "node-ports";
         if (node.kind !== "start")
           ports.append(
-            port("○ 入口", `连接到 ${node.name}`, () => connectTarget(node.id)),
+            port("input", "always", `连接到 ${node.name}`, () =>
+              connectTarget(node.id),
+            ),
           );
         const exits =
           node.kind === "gate"
@@ -232,39 +220,165 @@ window.workflowEditor = (() => {
               ? []
               : ["always"];
         exits.forEach((condition) => {
-          const p = port(
-            condition === "always"
-              ? "出口 ○"
-              : condition === "pass"
-                ? "通过 ○"
-                : "修复 ○",
+          const output = port(
+            "output",
+            condition,
             `从 ${node.name} ${condition} 连线`,
-            () => {
-              linkSource = { id: node.id, condition };
-              selectedNode = node.id;
-              feedback(`已选择「${node.name}」出口，请点击目标节点的入口。`);
-              render();
-            },
+            () => beginLink(node, condition),
           );
-          if (linkSource?.id === node.id && linkSource.condition === condition)
-            p.classList.add("source-active");
-          ports.append(p);
+          bindConnectionDrag(output, node, condition, canvas, svg);
+          ports.append(output);
+          const caption = document.createElement("span");
+          caption.className = `port-caption ${condition}`;
+          caption.textContent =
+            condition === "pass"
+              ? "通过"
+              : condition === "repair"
+                ? "需修复"
+                : "下一步";
+          ports.append(caption);
         });
         card.append(ports);
-        bindDrag(head, card, node);
+        bindDrag(head, card, node, () => paintEdges(svg, definition));
       }
+      if (!options.readonly)
+        card.addEventListener("click", (event) => {
+          if (
+            linkSource &&
+            node.id !== linkSource.id &&
+            node.kind !== "start" &&
+            !event.target.closest("button")
+          )
+            connectTarget(node.id);
+        });
       canvas.append(card);
     });
+    if (!options.readonly) markConnectionTargets(canvas);
   }
-  function port(label, aria, action) {
+
+  function port(side, condition, aria, action) {
     const button = document.createElement("button");
-    button.className = "node-port";
-    button.textContent = label;
+    button.className = `node-port ${side} ${condition}`;
     button.setAttribute("aria-label", aria);
-    button.addEventListener("click", action);
+    button.title = aria;
+    button.dataset.portSide = side;
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (button.dataset.skipClick) {
+        delete button.dataset.skipClick;
+        return;
+      }
+      action();
+    });
     return button;
   }
-  function bindDrag(head, card, node) {
+  function beginLink(node, condition) {
+    linkSource = { id: node.id, condition };
+    selectedNode = node.id;
+    selectedEdge = -1;
+    render();
+    feedback(
+      `从「${node.name}」连接：点击高亮入口或目标卡片。按 Esc 或“取消连线”退出。`,
+    );
+  }
+  function cancelLink() {
+    linkSource = null;
+    render();
+    feedback("已取消连线，原有连接保持不变。");
+  }
+  function markConnectionTargets(canvas) {
+    $("cancel-connection").hidden = !linkSource;
+    canvas.classList.toggle("connecting", Boolean(linkSource));
+    canvas.querySelectorAll(".flow-node").forEach((card) => {
+      const node = draft.nodes.find((n) => n.id === card.dataset.nodeId);
+      card.classList.toggle(
+        "connection-target",
+        Boolean(
+          linkSource && node.kind !== "start" && node.id !== linkSource.id,
+        ),
+      );
+      card
+        .querySelectorAll(".node-port.output")
+        .forEach((button) =>
+          button.classList.toggle(
+            "source-active",
+            Boolean(
+              linkSource?.id === node.id &&
+              button.classList.contains(linkSource.condition),
+            ),
+          ),
+        );
+    });
+  }
+  function bindConnectionDrag(button, node, condition, canvas, svg) {
+    let drag = null,
+      preview = null;
+    button.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      drag = { x: event.clientX, y: event.clientY, moved: false };
+      button.setPointerCapture(event.pointerId);
+    });
+    button.addEventListener("pointermove", (event) => {
+      if (!drag) return;
+      if (
+        Math.abs(event.clientX - drag.x) + Math.abs(event.clientY - drag.y) <
+          5 &&
+        !drag.moved
+      )
+        return;
+      drag.moved = true;
+      linkSource = { id: node.id, condition };
+      markConnectionTargets(canvas);
+      if (!preview) {
+        preview = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "path",
+        );
+        preview.setAttribute("class", "connection-preview");
+        svg.append(preview);
+      }
+      const rect = canvas.getBoundingClientRect(),
+        scale = GraphView.scale(canvas);
+      const a = GraphView.anchor(node, "output", condition),
+        x = (event.clientX - rect.left) / scale,
+        y = (event.clientY - rect.top) / scale;
+      preview.setAttribute(
+        "d",
+        `M${a.x},${a.y} C${a.x + 70},${a.y} ${x - 70},${y} ${x},${y}`,
+      );
+    });
+    button.addEventListener("pointerup", (event) => {
+      if (!drag?.moved) {
+        drag = null;
+        return;
+      }
+      button.dataset.skipClick = "1";
+      preview?.remove();
+      preview = null;
+      drag = null;
+      const target = document
+        .elementFromPoint(event.clientX, event.clientY)
+        ?.closest(".flow-node");
+      if (
+        target &&
+        target.dataset.nodeId !== node.id &&
+        !target.classList.contains("start")
+      )
+        connectTarget(target.dataset.nodeId);
+      else {
+        render();
+        feedback("选择一个高亮入口或目标卡片完成连线，也可按 Esc 取消。");
+      }
+    });
+    button.addEventListener("pointercancel", () => {
+      drag = null;
+      preview?.remove();
+      preview = null;
+      linkSource = null;
+      render();
+    });
+  }
+  function bindDrag(head, card, node, updateEdges) {
     let drag = null;
     head.addEventListener("pointerdown", (event) => {
       if (event.button !== 0) return;
@@ -279,7 +393,7 @@ window.workflowEditor = (() => {
     });
     head.addEventListener("pointermove", (event) => {
       if (!drag) return;
-      const scale = Number(card.parentElement.style.zoom) || 1;
+      const scale = GraphView.scale(card.parentElement);
       const dx = (event.clientX - drag.x) / scale,
         dy = (event.clientY - drag.y) / scale;
       if (!drag.moved && Math.abs(dx) + Math.abs(dy) > 5) {
@@ -291,6 +405,7 @@ window.workflowEditor = (() => {
       node.y = Math.max(10, Math.min(3000, drag.ny + dy));
       card.style.left = `${node.x}px`;
       card.style.top = `${node.y}px`;
+      updateEdges();
     });
     head.addEventListener("pointerup", () => {
       if (drag?.moved) {
@@ -341,9 +456,10 @@ window.workflowEditor = (() => {
       html = `<h3>已选中连线</h3><p class="field-help">${escapeHtml(draft.nodes.find((n) => n.id === edge.source)?.name)} → ${escapeHtml(draft.nodes.find((n) => n.id === edge.target)?.name)}</p><p class="field-help">现在点击“＋ 自定义角色”会自动插入这条连线。</p><button id="remove-edge" class="danger-link">删除此连线</button>`;
     }
     const choices = draft.nodes
+      .filter((n) => n.kind !== "end")
       .map((n) => `<option value="${n.id}">${escapeHtml(n.name)}</option>`)
       .join("");
-    html += `<hr><h3>手动连接</h3><label>起点<select id="edge-source">${choices}</select></label><label>出口<select id="edge-condition"><option value="always">普通出口</option><option value="pass">判定：通过</option><option value="repair">判定：需修复</option></select></label><label>终点<select id="edge-target">${choices}</select></label><button id="connect-edge" class="secondary-button">连接节点</button><p class="field-help">同一出口重新连接时会替换旧连线。保存前会检查整个流程。</p><label>总步数上限<input id="graph-max-steps" type="number" min="10" max="300" value="${draft.max_steps}"></label><button id="apply-limit" class="secondary-button">应用步数上限</button>`;
+    html += `<hr><h3>连接设置</h3><label>起点<select id="edge-source">${choices}</select></label><label>出口<select id="edge-condition"></select></label><label>终点<select id="edge-target"></select></label><button id="connect-edge" class="secondary-button">${edge ? "更新这条连线" : "连接节点"}</button><p class="field-help">选中现有连线可直接调整。每个出口只保留一个目标，连接完成后点“检查结构”。</p><label>总步数上限<input id="graph-max-steps" type="number" min="10" max="300" value="${draft.max_steps}"></label><button id="apply-limit" class="secondary-button">应用步数上限</button>`;
     $("graph-inspector").innerHTML = html;
     if (node) {
       $("edge-source").value = node.id;
@@ -384,17 +500,48 @@ window.workflowEditor = (() => {
       draft.max_steps = n;
       feedback("步数上限已更新。");
     };
-    $("edge-source").onchange = () => {
-      $("edge-condition").value =
-        draft.nodes.find((n) => n.id === $("edge-source").value)?.kind ===
-        "gate"
-          ? "pass"
-          : "always";
-    };
-    if (node?.kind === "gate") $("edge-condition").value = "pass";
+    const selectedSource =
+      edge?.source ||
+      (node?.kind !== "end" ? node?.id : null) ||
+      draft.nodes.find((n) => n.kind === "start").id;
+    $("edge-source").value = selectedSource;
+    function updateConnectionFields(preferredCondition, preferredTarget) {
+      const from = draft.nodes.find((n) => n.id === $("edge-source").value);
+      const conditions = from.kind === "gate" ? ["pass", "repair"] : ["always"];
+      $("edge-condition").innerHTML = conditions
+        .map(
+          (value) =>
+            `<option value="${value}">${{ always: "下一步", pass: "通过", repair: "需修复" }[value]}</option>`,
+        )
+        .join("");
+      if (conditions.includes(preferredCondition))
+        $("edge-condition").value = preferredCondition;
+      updateTarget(preferredTarget);
+    }
+    function updateTarget(preferredTarget) {
+      const from = $("edge-source").value,
+        condition = $("edge-condition").value;
+      const current = draft.edges.find(
+        (e) => e.source === from && e.condition === condition,
+      );
+      $("edge-target").innerHTML =
+        '<option value="">选择目标节点</option>' +
+        draft.nodes
+          .filter((n) => n.kind !== "start" && n.id !== from)
+          .map((n) => `<option value="${n.id}">${escapeHtml(n.name)}</option>`)
+          .join("");
+      $("edge-target").value = preferredTarget || current?.target || "";
+    }
+    $("edge-source").onchange = () => updateConnectionFields();
+    $("edge-condition").onchange = () => updateTarget();
+    updateConnectionFields(edge?.condition, edge?.target);
   }
   function connect(source, target, condition) {
     const node = draft.nodes.find((n) => n.id === source);
+    if (!node || !draft.nodes.some((n) => n.id === target)) {
+      feedback("请选择有效的起点与终点。", true);
+      return;
+    }
     if (
       source === target ||
       node.kind === "end" ||
@@ -421,7 +568,7 @@ window.workflowEditor = (() => {
   function connectTarget(target) {
     if (!linkSource) {
       selectedNode = target;
-      selectedEdge = -1;
+      selectedEdge = draft.edges.findIndex((edge) => edge.target === target);
       render();
       feedback("先点击起点节点的出口，再点击目标入口。");
       return;
@@ -495,6 +642,7 @@ window.workflowEditor = (() => {
   }
   function layout() {
     remember();
+    refitNext = true;
     const main = [],
       visited = new Set();
     let current = draft.nodes.find((n) => n.kind === "start")?.id;
@@ -633,7 +781,27 @@ window.workflowEditor = (() => {
     $("add-custom").onclick = () => addNode("custom");
     $("add-verifier").onclick = () => addNode("verifier");
     $("graph-layout").onclick = layout;
-    $("graph-zoom").onchange = render;
+    $("graph-zoom").onchange = () => {
+      refitNext = true;
+      render();
+    };
+    $("graph-fit").onclick = () => {
+      $("graph-zoom").value = "auto";
+      refitNext = true;
+      render();
+    };
+    $("cancel-connection").onclick = cancelLink;
+    document.addEventListener("keydown", (event) => {
+      if (
+        event.key === "Escape" &&
+        linkSource &&
+        !document.querySelector("dialog[open]") &&
+        !$("graph-workspace").hidden
+      ) {
+        event.preventDefault();
+        cancelLink();
+      }
+    });
     $("check-workflow").onclick = check;
     $("save-workflow").onclick = save;
     $("graph-undo").onclick = () => {
