@@ -89,3 +89,11 @@ test("edges terminate at the same coordinates as their input and output handles"
     view.anchor(source, "output", "repair").y,
   );
 });
+
+test("fit uses both viewport dimensions and leaves space around the diagram", () => {
+  const fitted = view.fitScale(1200, 1060, 400, 680);
+  assert.ok(fitted * 1060 <= 1200 - 48 + 1e-9);
+  assert.ok(fitted * 680 <= 400 - 48 + 1e-9);
+  assert.equal(view.fitScale(2200, 1060, 1200, 680), 1);
+  assert.equal(view.fitScale(100, 4000, 100, 2000), 0.15);
+});

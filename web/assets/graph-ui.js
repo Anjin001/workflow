@@ -46,6 +46,7 @@ window.workflowEditor = (() => {
     previousView = "welcome",
     ready = false;
   let editorZoom = 1;
+  let fitOnOpen = true;
   let rolePrompts = {};
   let loadError = "";
   let inspectedRunNode = null,
@@ -96,6 +97,7 @@ window.workflowEditor = (() => {
   }
   function loadDraft(definition, identifier = null) {
     draft = clone(definition);
+    fitOnOpen = true;
     libraryId = identifier;
     selectedNode = null;
     selectedEdge = -1;
@@ -107,7 +109,7 @@ window.workflowEditor = (() => {
     render();
   }
   function setEditorZoom(value) {
-    editorZoom = Math.max(0.35, Math.min(1.5, Number(value) || 1));
+    editorZoom = Math.max(0.15, Math.min(1.5, Number(value) || 1));
     const select = $("graph-zoom");
     select.querySelector("[data-fit-scale]")?.remove();
     if (
@@ -121,6 +123,19 @@ window.workflowEditor = (() => {
     }
     select.value = String(editorZoom);
     render();
+  }
+  function fitEditor(initial = false) {
+    const viewport = $("graph-scroll");
+    const size = graphSize(draft);
+    const fitted = GraphView.fitScale(
+      viewport.clientWidth,
+      size.width,
+      viewport.clientHeight,
+      size.height,
+    );
+    setEditorZoom(initial ? Math.min(0.85, fitted) : fitted);
+    viewport.scrollLeft = 0;
+    viewport.scrollTop = 0;
   }
   function graphSize(definition) {
     return {
@@ -440,6 +455,11 @@ window.workflowEditor = (() => {
     $("graph-undo").disabled = !undo.length;
     $("add-verifier").disabled = draft.nodes.some((n) => n.kind === "verifier");
     renderInspector();
+    // 仅在载入流程后首次显示时适配；选中节点、重绘和窗口变化不改缩放。
+    if (fitOnOpen && !$("graph-workspace").hidden) {
+      fitOnOpen = false;
+      fitEditor(true);
+    }
   }
   function renderInspector() {
     const node = draft.nodes.find((n) => n.id === selectedNode),
@@ -802,10 +822,7 @@ window.workflowEditor = (() => {
     $("graph-layout").onclick = layout;
     $("graph-zoom").onchange = () =>
       setEditorZoom(Number($("graph-zoom").value));
-    $("graph-fit").onclick = () => {
-      const width = $("graph-scroll").clientWidth;
-      setEditorZoom(GraphView.fitScale(width, graphSize(draft).width));
-    };
+    $("graph-fit").onclick = () => fitEditor();
     $("cancel-connection").onclick = cancelLink;
     document.addEventListener("keydown", (event) => {
       if (

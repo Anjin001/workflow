@@ -29,24 +29,64 @@
   font-size: 13px;
   cursor: pointer;
 }
+/* 设计器使用剩余窗口；仅画布内容缩放，导航和设置保持正常字号。 */
+body:has(#graph-workspace:not([hidden])) {
+  overflow: hidden;
+}
+.main:has(#graph-workspace:not([hidden])) {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+.main:has(#graph-workspace:not([hidden])) > .topbar {
+  height: 56px;
+  min-height: 56px;
+  padding: 0 24px;
+}
+.main:has(#graph-workspace:not([hidden])) > .page-footer {
+  display: none;
+}
 .graph-workspace {
-  padding: 28px 30px;
-  max-width: 1700px;
-  margin: auto;
+  padding: 10px 16px 8px;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto auto auto auto auto minmax(0, 1fr) auto;
 }
 .graph-heading {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 16px;
-  margin-bottom: 22px;
+  margin-bottom: 4px;
+}
+.graph-heading > div {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
 }
 .graph-heading h1 {
-  font-size: 26px;
-  margin: 7px 0;
+  font-size: 18px;
+  margin: 0;
+}
+.graph-heading .eyebrow {
+  display: none;
 }
 .graph-heading p {
-  margin: 6px 0;
+  margin: 4px 0 0;
+  font-size: 12px;
+}
+.graph-workspace .primary-button,
+.graph-workspace .secondary-button {
+  padding: 8px 12px;
+  font-size: 13px;
+}
+.graph-workspace > .field-help {
+  font-size: 11px;
+  padding-top: 6px;
 }
 .graph-toolbar,
 .graph-tools {
@@ -54,38 +94,47 @@
   align-items: end;
   gap: 10px;
   flex-wrap: wrap;
-  margin: 12px 0;
+  margin: 5px 0;
 }
 .graph-toolbar label {
   font-size: 12px;
   color: #66736a;
-  display: grid;
-  gap: 5px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
 }
 .graph-toolbar input {
-  min-width: 210px;
+  padding: 8px 10px;
+  min-width: 180px;
 }
 .graph-toolbar select {
-  min-width: 230px;
+  padding: 8px 10px;
+  min-width: 190px;
   max-width: 320px;
 }
 .graph-tools {
   align-items: center;
+  gap: 5px;
+}
+#graph-dirty {
+  margin-left: auto;
+  font-size: 11px;
 }
 .graph-instructions {
-  font-size: 13px;
+  font-size: 11px;
   color: #647268;
   line-height: 1.7;
-  margin: 16px 0 8px;
+  margin: 3px 0;
 }
 .graph-feedback {
   background: #edf3e9;
   border-radius: 8px;
   color: #41644b;
-  padding: 11px 14px;
+  padding: 5px 10px;
   font-size: 13px;
-  min-height: 40px;
-  margin: 10px 0 16px;
+  min-height: 28px;
+  margin: 4px 0 8px;
 }
 .graph-feedback.error {
   background: #fff0eb;
@@ -93,11 +142,21 @@
 }
 .graph-editor-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 265px;
+  grid-template-columns: minmax(0, 1fr) clamp(270px, 23%, 340px);
+  min-height: 0;
   border: 1px solid #dde3d9;
-  border-radius: 14px;
+  border-radius: 10px;
   overflow: hidden;
   background: #fff;
+}
+.graph-editor-grid > .graph-scroll {
+  height: 100%;
+  min-height: 0;
+  padding: 24px;
+  overscroll-behavior: contain;
+}
+.graph-editor-grid .graph-surface {
+  margin: 0 auto;
 }
 .graph-scroll {
   overflow: auto;
@@ -230,7 +289,9 @@
   border-left: 1px solid #e2e7de;
   padding: 18px;
   overflow: auto;
-  max-height: 620px;
+  max-height: none;
+  min-height: 0;
+  scrollbar-gutter: stable;
   background: #fdfefb;
 }
 .graph-inspector h3 {
@@ -368,12 +429,16 @@
 }
 @media (max-width: 1100px) {
   .graph-editor-grid {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) 270px;
   }
-  .graph-inspector {
-    border-left: 0;
-    border-top: 1px solid #e5eadf;
-    max-height: none;
+  .graph-workspace {
+    padding: 12px;
+  }
+  .graph-tools {
+    gap: 2px;
+  }
+  #graph-dirty {
+    display: none;
   }
   .graph-run-layout {
     grid-template-columns: minmax(0, 1fr);
@@ -385,11 +450,38 @@
   }
 }
 @media (max-width: 650px) {
+  body:has(#graph-workspace:not([hidden])) {
+    overflow: auto;
+  }
+  .main:has(#graph-workspace:not([hidden])) {
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+  }
   .graph-workspace {
-    padding: 20px 14px;
+    padding: 12px;
+    display: block;
+  }
+  .graph-editor-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .graph-editor-grid > .graph-scroll {
+    height: 55dvh;
+    min-height: 300px;
+  }
+  .graph-inspector {
+    border-left: 0;
+    border-top: 1px solid #e5eadf;
+    max-height: 440px;
   }
   .graph-heading {
     align-items: start;
+  }
+  .graph-heading > div {
+    display: block;
+  }
+  .graph-toolbar label {
+    display: grid;
   }
   .graph-heading h1 {
     font-size: 22px;

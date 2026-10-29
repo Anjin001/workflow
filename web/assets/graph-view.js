@@ -5,10 +5,14 @@
   const views = new WeakMap();
   const NODE_WIDTH = 190;
 
-  function fitScale(width, contentWidth) {
+  function fitScale(width, contentWidth, height = Infinity, contentHeight = 1) {
     return Math.max(
-      0.35,
-      Math.min(1, (Math.max(1, width) - 24) / contentWidth),
+      0.15,
+      Math.min(
+        1,
+        (Math.max(1, width) - 48) / contentWidth,
+        (Math.max(1, height) - 48) / contentHeight,
+      ),
     );
   }
 
@@ -24,7 +28,7 @@
       views.set(canvas, view);
     }
     // 此处只消费用户指定的数值，不观察布局、不测量可用宽度、不自动适配。
-    view.scale = Math.max(0.35, Math.min(1.5, Number(requestedScale) || 1));
+    view.scale = Math.max(0.15, Math.min(1.5, Number(requestedScale) || 1));
     canvas.style.removeProperty("zoom");
     canvas.style.width = `${size.width}px`;
     canvas.style.height = `${size.height}px`;
